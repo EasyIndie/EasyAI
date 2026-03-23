@@ -1,0 +1,23 @@
+service:
+  default_timeout_ms: 20000
+  allowed_models:
+    - local/ollama:qwen2.5:0.5b
+    - local/ollama:llama3.1
+
+providers:
+  ollama:
+    api_base_env: OLLAMA_HOST
+
+model_aliases:
+  local/ollama:qwen2.5:0.5b:
+    selection: round_robin
+    backends:
+      - provider: ollama
+        model: qwen2.5:0.5b
+        api_base_env: OLLAMA_HOST
+      - provider: ollama
+        model: qwen2.5:0.5b
+        api_base_env: OLLAMA_HOST_2
+  local/ollama:llama3.1:
+    provider: ollama
+    model: llama3.1

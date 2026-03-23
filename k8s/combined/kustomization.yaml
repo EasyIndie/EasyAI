@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - redis.yaml
+  - postgres.yaml
+  - ollama.yaml
+  - ollama2.yaml
+  - litellm.yaml
+  - oneapi.yaml
+  - batch-worker.yaml
+
+configMapGenerator:
+  - name: litellm-config
+    files:
+      - litellm.yaml=../../config/litellm/litellm.yaml
+
+secretGenerator:
+  - name: oneapi-secrets
+    literals:
+      - ONEAPI_ADMIN_USER=admin
+      - ONEAPI_ADMIN_PASS=admin
+      - ONEAPI_API_KEYS=dev-key
+      - ONEAPI_INTERNAL_TOKEN=dev-internal
+
+generatorOptions:
+  disableNameSuffixHash: true

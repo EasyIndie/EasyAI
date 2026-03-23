@@ -1,0 +1,493 @@
+import pg from "pg";
+
+export type Db = {
+  pool: pg.Pool;
+  close: () => Promise<void>;
+};
+
+export async function createDb(databaseUrl: string): Promise<Db> {
+  const pool = new pg.Pool({ connectionString: databaseUrl });
+  await migrate(pool);
+  return {
+    pool,
+    close: async () => {
+      await pool.end();
+    },
+  };
+}
+
+async function migrate(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    create table if not exists usage_events (
+      id bigserial primary key,
+      ts timestamptz not null default now(),
+      principal text not null,
+      api_key_hash text,
+      auth_mode text not null,
+      model text,
+      endpoint text not null,
+      method text not null,
+      status int not null,
+      latency_ms int not null,
+      cached boolean not null default false,
+      upstream text,
+      request_bytes int,
+      response_bytes int,
+      prompt_tokens int,
+      completion_tokens int,
+      total_tokens int,
+      error text,
+      ttft_ms int,
+      tps double precision
+    );
+  `);
+  await pool.query(`
+    do $$
+    begin
+      if not exists (select 1 from information_schema.columns where table_name='usage_events' and column_name='ttft_ms') then
+        alter table usage_events add column ttft_ms int;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='usage_events' and column_name='tps') then
+        alter table usage_events add column tps double precision;
+      end if;
+    end $$;
+  `);
+  await pool.query(`create index if not exists usage_events_ts_idx on usage_events(ts desc);`);
+  await pool.query(`create index if not exists usage_events_principal_ts_idx on usage_events(principal, ts desc);`);
+
+  await pool.query(`
+    create table if not exists api_keys (
+      id bigserial primary key,
+      key_hash text not null unique,
+      key_prefix text not null,
+      created_at timestamptz not null default now(),
+      revoked_at timestamptz,
+      rpm_limit int,
+      tenant_id text
+    );
+  `);
+  await pool.query(`
+    do $$
+    begin
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='tenant_id') then
+        alter table api_keys add column tenant_id text;
+      end if;
+    end $$;
+  `);
+  await pool.query(`create index if not exists api_keys_revoked_idx on api_keys(revoked_at);`);
+  await pool.query(`create index if not exists api_keys_tenant_idx on api_keys(tenant_id);`);
+
+  await pool.query(`
+    create table if not exists tenants (
+      tenant_id text primary key,
+      created_at timestamptz not null default now(),
+      rpm_limit int,
+      tpm_limit int,
+      disabled boolean not null default false
+    );
+  `);
+  await pool.query(`create index if not exists tenants_disabled_idx on tenants(disabled);`);
+
+  await pool.query(`
+    create table if not exists batches (
+      batch_id text primary key,
+      principal text not null,
+      tenant_id text,
+      status text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      total int not null,
+      completed int not null default 0,
+      failed int not null default 0
+    );
+  `);
+  await pool.query(`create index if not exists batches_status_idx on batches(status, created_at desc);`);
+
+  await pool.query(`
+    create table if not exists batch_items (
+      batch_id text not null references batches(batch_id) on delete cascade,
+      idx int not null,
+      endpoint text not null,
+      request_json text not null,
+      status text not null,
+      response_json text,
+      error text,
+      primary key (batch_id, idx)
+    );
+  `);
+  await pool.query(`create index if not exists batch_items_batch_idx on batch_items(batch_id, idx);`);
+}
+
+export type UsageEvent = {
+  principal: string;
+  apiKeyHash?: string;
+  authMode: string;
+  model?: string;
+  endpoint: string;
+  method: string;
+  status: number;
+  latencyMs: number;
+  cached: boolean;
+  upstream?: string;
+  requestBytes?: number;
+  responseBytes?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  error?: string;
+  ttftMs?: number;
+  tps?: number;
+};
+
+export async function insertUsageEvent(db: Db, e: UsageEvent): Promise<void> {
+  await db.pool.query(
+    `
+    insert into usage_events (
+      principal, api_key_hash, auth_mode, model, endpoint, method, status, latency_ms, cached, upstream,
+      request_bytes, response_bytes, prompt_tokens, completion_tokens, total_tokens, error, ttft_ms, tps
+    ) values (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+      $11,$12,$13,$14,$15,$16,$17,$18
+    )
+  `,
+    [
+      e.principal,
+      e.apiKeyHash ?? null,
+      e.authMode,
+      e.model ?? null,
+      e.endpoint,
+      e.method,
+      e.status,
+      e.latencyMs,
+      e.cached,
+      e.upstream ?? null,
+      e.requestBytes ?? null,
+      e.responseBytes ?? null,
+      e.promptTokens ?? null,
+      e.completionTokens ?? null,
+      e.totalTokens ?? null,
+      e.error ?? null,
+      e.ttftMs ?? null,
+      e.tps ?? null,
+    ],
+  );
+}
+
+export type UsageSummaryRow = {
+  principal: string;
+  requests: number;
+  errors: number;
+  cached: number;
+  p95_latency_ms: number | null;
+  total_tokens: number | null;
+};
+
+export async function getUsageSummary(db: Db, sinceMinutes: number): Promise<UsageSummaryRow[]> {
+  const res = await db.pool.query(
+    `
+    select
+      principal,
+      count(*)::int as requests,
+      sum(case when status >= 400 then 1 else 0 end)::int as errors,
+      sum(case when cached then 1 else 0 end)::int as cached,
+      percentile_cont(0.95) within group (order by latency_ms)::float as p95_latency_ms,
+      sum(total_tokens)::bigint as total_tokens
+    from usage_events
+    where ts >= now() - ($1::text || ' minutes')::interval
+    group by principal
+    order by requests desc
+    limit 200
+  `,
+    [String(sinceMinutes)],
+  );
+  return res.rows;
+}
+
+export type ApiKeyRow = {
+  id: number;
+  key_hash: string;
+  key_prefix: string;
+  created_at: string;
+  revoked_at: string | null;
+  rpm_limit: number | null;
+  tenant_id: string | null;
+};
+
+export async function listApiKeys(db: Db): Promise<ApiKeyRow[]> {
+  const res = await db.pool.query(
+    `
+    select id, key_hash, key_prefix, created_at::text, revoked_at::text, rpm_limit, tenant_id
+    from api_keys
+    order by id desc
+    limit 500
+  `,
+  );
+  return res.rows;
+}
+
+export async function insertApiKey(db: Db, keyHash: string, keyPrefix: string): Promise<{ id: number }> {
+  const res = await db.pool.query(
+    `
+    insert into api_keys (key_hash, key_prefix)
+    values ($1, $2)
+    returning id
+  `,
+    [keyHash, keyPrefix],
+  );
+  return { id: Number(res.rows[0]?.id) };
+}
+
+export async function revokeApiKey(db: Db, id: number): Promise<void> {
+  await db.pool.query(`update api_keys set revoked_at = now() where id = $1 and revoked_at is null`, [id]);
+}
+
+export async function updateApiKeyRpm(db: Db, id: number, rpmLimit: number | null): Promise<void> {
+  await db.pool.query(`update api_keys set rpm_limit = $2 where id = $1`, [id, rpmLimit]);
+}
+
+export async function updateApiKeyTenant(db: Db, id: number, tenantId: string | null): Promise<void> {
+  await db.pool.query(`update api_keys set tenant_id = $2 where id = $1`, [id, tenantId]);
+}
+
+export async function findActiveApiKeyByHash(
+  db: Db,
+  keyHash: string,
+): Promise<{ id: number; rpm_limit: number | null; tenant_id: string | null } | undefined> {
+  const res = await db.pool.query(
+    `select id, rpm_limit, tenant_id from api_keys where key_hash = $1 and revoked_at is null limit 1`,
+    [keyHash],
+  );
+  if (!res.rows?.length) return;
+  return {
+    id: Number(res.rows[0].id),
+    rpm_limit: res.rows[0].rpm_limit ?? null,
+    tenant_id: res.rows[0].tenant_id ?? null,
+  };
+}
+
+export type TenantRow = {
+  tenant_id: string;
+  created_at: string;
+  rpm_limit: number | null;
+  tpm_limit: number | null;
+  disabled: boolean;
+};
+
+export async function deleteApiKey(db: Db, id: number, force: boolean): Promise<"deleted" | "not_found" | "must_revoke"> {
+  if (force) {
+    const res = await db.pool.query(`delete from api_keys where id=$1`, [id]);
+    return res.rowCount === 1 ? "deleted" : "not_found";
+  }
+
+  const res = await db.pool.query(`delete from api_keys where id=$1 and revoked_at is not null`, [id]);
+  if (res.rowCount === 1) return "deleted";
+
+  const existsRes = await db.pool.query(`select id, revoked_at from api_keys where id=$1 limit 1`, [id]);
+  if (!existsRes.rows?.length) return "not_found";
+  if (!existsRes.rows[0].revoked_at) return "must_revoke";
+  const res2 = await db.pool.query(`delete from api_keys where id=$1`, [id]);
+  return res2.rowCount === 1 ? "deleted" : "not_found";
+}
+
+export async function deleteTenant(
+  db: Db,
+  tenantId: string,
+  force: boolean,
+): Promise<"deleted" | "not_found" | "has_keys"> {
+  if (!force) {
+    const res = await db.pool.query(
+      `
+      delete from tenants
+      where tenant_id = $1
+        and not exists (select 1 from api_keys where tenant_id = $1)
+    `,
+      [tenantId],
+    );
+    if (res.rowCount === 1) return "deleted";
+
+    const existsRes = await db.pool.query(`select tenant_id from tenants where tenant_id=$1 limit 1`, [tenantId]);
+    if (!existsRes.rows?.length) return "not_found";
+
+    const keysRes = await db.pool.query(`select 1 from api_keys where tenant_id=$1 limit 1`, [tenantId]);
+    if (keysRes.rows?.length) return "has_keys";
+    const res2 = await db.pool.query(`delete from tenants where tenant_id=$1`, [tenantId]);
+    return res2.rowCount === 1 ? "deleted" : "not_found";
+  }
+
+  const existsRes = await db.pool.query(`select tenant_id from tenants where tenant_id=$1 limit 1`, [tenantId]);
+  if (!existsRes.rows?.length) return "not_found";
+
+  await db.pool.query(`update api_keys set tenant_id=null where tenant_id=$1`, [tenantId]);
+  await db.pool.query(`delete from tenants where tenant_id=$1`, [tenantId]);
+  return "deleted";
+}
+
+export async function unbindTenantKeys(db: Db, tenantId: string): Promise<number> {
+  const res = await db.pool.query(`update api_keys set tenant_id=null where tenant_id=$1`, [tenantId]);
+  return res.rowCount ?? 0;
+}
+
+export type BatchStatus = "queued" | "running" | "completed" | "failed";
+
+export type BatchRow = {
+  batch_id: string;
+  principal: string;
+  tenant_id: string | null;
+  status: BatchStatus;
+  created_at: string;
+  updated_at: string;
+  total: number;
+  completed: number;
+  failed: number;
+};
+
+export async function createBatch(
+  db: Db,
+  batchId: string,
+  principal: string,
+  tenantId: string | null,
+  total: number,
+): Promise<void> {
+  await db.pool.query(
+    `
+    insert into batches (batch_id, principal, tenant_id, status, total)
+    values ($1, $2, $3, 'queued', $4)
+  `,
+    [batchId, principal, tenantId, total],
+  );
+}
+
+export async function insertBatchItem(
+  db: Db,
+  batchId: string,
+  idx: number,
+  endpoint: string,
+  requestJson: string,
+): Promise<void> {
+  await db.pool.query(
+    `
+    insert into batch_items (batch_id, idx, endpoint, request_json, status)
+    values ($1, $2, $3, $4, 'queued')
+  `,
+    [batchId, idx, endpoint, requestJson],
+  );
+}
+
+export async function getBatch(db: Db, batchId: string): Promise<BatchRow | undefined> {
+  const res = await db.pool.query(
+    `
+    select batch_id, principal, tenant_id, status, created_at::text, updated_at::text, total, completed, failed
+    from batches
+    where batch_id = $1
+    limit 1
+  `,
+    [batchId],
+  );
+  if (!res.rows?.length) return;
+  return res.rows[0];
+}
+
+export async function listBatchItems(
+  db: Db,
+  batchId: string,
+): Promise<{ idx: number; endpoint: string; status: string; response_json: string | null; error: string | null }[]> {
+  const res = await db.pool.query(
+    `
+    select idx, endpoint, status, response_json, error
+    from batch_items
+    where batch_id = $1
+    order by idx asc
+  `,
+    [batchId],
+  );
+  return res.rows;
+}
+
+export async function claimBatch(db: Db, batchId: string): Promise<boolean> {
+  const res = await db.pool.query(
+    `update batches set status='running', updated_at=now() where batch_id=$1 and status='queued'`,
+    [batchId],
+  );
+  return res.rowCount === 1;
+}
+
+export async function markBatchItemResult(
+  db: Db,
+  batchId: string,
+  idx: number,
+  status: "completed" | "failed",
+  responseJson: string | null,
+  error: string | null,
+): Promise<void> {
+  await db.pool.query(
+    `
+    update batch_items
+    set status=$3, response_json=$4, error=$5
+    where batch_id=$1 and idx=$2
+  `,
+    [batchId, idx, status, responseJson, error],
+  );
+}
+
+export async function finishBatch(db: Db, batchId: string): Promise<void> {
+  await db.pool.query(
+    `
+    with s as (
+      select
+        sum(case when status='completed' then 1 else 0 end)::int as completed,
+        sum(case when status='failed' then 1 else 0 end)::int as failed
+      from batch_items
+      where batch_id = $1
+    )
+    update batches
+    set
+      status = case when (select failed from s) > 0 then 'failed' else 'completed' end,
+      completed = (select completed from s),
+      failed = (select failed from s),
+      updated_at = now()
+    where batch_id = $1
+  `,
+    [batchId],
+  );
+}
+
+export async function listTenants(db: Db): Promise<TenantRow[]> {
+  const res = await db.pool.query(
+    `
+    select tenant_id, created_at::text, rpm_limit, tpm_limit, disabled
+    from tenants
+    order by tenant_id asc
+    limit 500
+  `,
+  );
+  return res.rows;
+}
+
+export async function upsertTenant(
+  db: Db,
+  tenantId: string,
+  rpmLimit: number | null,
+  tpmLimit: number | null,
+  disabled: boolean,
+): Promise<void> {
+  await db.pool.query(
+    `
+    insert into tenants (tenant_id, rpm_limit, tpm_limit, disabled)
+    values ($1, $2, $3, $4)
+    on conflict (tenant_id) do update set
+      rpm_limit = excluded.rpm_limit,
+      tpm_limit = excluded.tpm_limit,
+      disabled = excluded.disabled
+  `,
+    [tenantId, rpmLimit, tpmLimit, disabled],
+  );
+}
+
+export async function findTenant(db: Db, tenantId: string): Promise<TenantRow | undefined> {
+  const res = await db.pool.query(
+    `select tenant_id, created_at::text, rpm_limit, tpm_limit, disabled from tenants where tenant_id = $1 limit 1`,
+    [tenantId],
+  );
+  if (!res.rows?.length) return;
+  return res.rows[0];
+}

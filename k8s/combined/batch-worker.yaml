@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-worker
+  template:
+    metadata:
+      labels:
+        app: batch-worker
+    spec:
+      containers:
+        - name: batch-worker
+          image: easyai/batch-worker:latest
+          env:
+            - name: REDIS_URL
+              value: redis://redis:6379
+            - name: DATABASE_URL
+              value: postgres://oneapi:oneapi@postgres:5432/oneapi
+            - name: ONEAPI_BASE_URL
+              value: http://oneapi:8080
+            - name: ONEAPI_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: oneapi-secrets
+                  key: ONEAPI_INTERNAL_TOKEN
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi

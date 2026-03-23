@@ -1,0 +1,19 @@
+{
+  "name": "easyai-load-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && npm run build:single && npm run build:multi && npm run build:peak",
+    "build:single": "esbuild k6/single_user.ts --bundle --platform=neutral --target=es2022 --external:k6 --external:k6/http --outfile=dist/single_user",
+    "build:multi": "esbuild k6/multi_tenant.ts --bundle --platform=neutral --target=es2022 --external:k6 --external:k6/http --outfile=dist/multi_tenant",
+    "build:peak": "esbuild k6/peak.ts --bundle --platform=neutral --target=es2022 --external:k6 --external:k6/http --outfile=dist/peak",
+    "run:single": "npm run build:single && k6 run dist/single_user",
+    "run:multi": "npm run build:multi && k6 run dist/multi_tenant",
+    "run:peak": "npm run build:peak && k6 run dist/peak"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.1"
+  }
+}

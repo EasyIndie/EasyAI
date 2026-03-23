@@ -1,0 +1,6 @@
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+litellm==1.61.20
+prometheus-client==0.21.1
+python-json-logger==2.0.7
+PyYAML==6.0.2

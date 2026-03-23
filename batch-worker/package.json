@@ -1,0 +1,16 @@
+{
+  "name": "easyai-batch-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "ts-node --esm src/index.ts"
+  },
+  "dependencies": {
+    "@types/node": "^22.18.0",
+    "pg": "8.14.1",
+    "redis": "^4.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
