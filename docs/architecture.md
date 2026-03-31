@@ -20,6 +20,7 @@
   - Failover/circuit-breaker style fallback across upstreams
   - Usage analytics (Postgres) + basic dashboard
   - Batch API (`/v1/batches`) + async worker (optional)
+  - User-facing OpenAPI docs (`/docs`, `/openapi.json`)
   - Prometheus metrics
 
 ## Combined Mode (OneAPI → LiteLLM)
@@ -31,7 +32,6 @@ flowchart LR
   G -->|Cache miss| LB[Upstream Pool]
   LB --> L[LiteLLM Service]
   L --> O[Local Provider: Ollama]
-  L --> O2[Local Provider: Ollama2]
   G --> P[(Postgres: usage_events)]
   G --> M[Prometheus]
   L --> M

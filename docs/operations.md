@@ -33,8 +33,6 @@ curl -sS http://localhost:8080/healthz
 curl -sS http://localhost:8080/metrics | head
 ```
 
-### 1.3 常用验收 curl
-
 ### 1.3 标准验收 SOP（推荐）
 
 目标：把一次失败快速定位到 OneAPI / LiteLLM / Ollama 的哪一层，并覆盖 Trae 常用形态（非流式/流式、别名模型）。
@@ -48,7 +46,13 @@ curl -sS http://localhost:8080/healthz
 curl -sS http://localhost:4000/healthz
 ```
 
-2) 确认本地模型已拉取（否则可能出现 upstream error）：
+2) 接口文档可访问（用户侧）：
+
+```bash
+curl -sS http://localhost:8080/openapi.json | head
+```
+
+3) 确认本地模型已拉取（否则可能出现 upstream error）：
 
 ```bash
 docker compose exec -T ollama ollama list

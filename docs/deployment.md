@@ -23,6 +23,13 @@ curl -sS http://localhost:8080/healthz
 curl -sS http://localhost:4000/healthz
 ```
 
+查看用户侧 API 文档（Swagger UI / OpenAPI）：
+
+```bash
+open http://localhost:8080/docs
+curl -sS http://localhost:8080/openapi.json | head
+```
+
 通过网关发起一次请求：
 
 ```bash
@@ -36,9 +43,10 @@ curl -sS http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-### 1.2 Batch（可选）
+### 1.2 Batch（默认启用，可选关闭）
 
-如需启用 `/v1/batches`，设置 `ONEAPI_INTERNAL_TOKEN`，并确保 `batch_worker` 使用相同 token。
+- 默认 Quickstart 已启用 Batch：`.env.example` 包含 `ONEAPI_INTERNAL_TOKEN` 且 compose 会启动 `batch_worker`。
+- 关闭 Batch：清空 `ONEAPI_INTERNAL_TOKEN`，并停止/不部署 `batch_worker`。未配置 token 时 `/v1/batches` 返回 503。
 
 ### 1.3 Kubernetes（kustomize）
 
@@ -56,7 +64,7 @@ kubectl apply -k k8s/combined
 说明：
 - `k8s/combined` 默认包含单个 `ollama` 本地后端（更省资源）。
 - Batch 依赖 `ONEAPI_INTERNAL_TOKEN`，示例 secret 仅用于演示，真实环境请替换为安全值。
- - `k8s/combined` 默认启用 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
+- `k8s/combined` 默认启用 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
 
 生产环境建议使用 overlay（避免示例默认值被误用）：
 
@@ -106,6 +114,7 @@ docker run --rm -p 8080:8080 \
 
 ```bash
 curl -sS http://localhost:8080/healthz
+open http://localhost:8080/docs
 curl -sS -u admin:admin http://localhost:8080/admin/api/usage?sinceMinutes=60 | head
 ```
 

@@ -41,7 +41,9 @@ This directory contains a modular AI API service platform composed of:
 - OneAPI Gateway: `http://localhost:8080`
   - Health: `/healthz`
   - Metrics: `/metrics`
-  - Dashboard: `/dashboard` (basic admin view)
+  - API Docs (Swagger UI): `/docs`
+  - OpenAPI spec: `/openapi.json`
+  - Admin UI: `/dashboard`
 
 ## Documentation
 
