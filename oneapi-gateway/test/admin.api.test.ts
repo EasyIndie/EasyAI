@@ -13,6 +13,7 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
     appEnv: "test",
     port: 0,
     logLevel: "info",
+    trustProxy: false,
     adminUser: "admin",
     adminPass: "admin",
     authModes: new Set(["apikey"]),
@@ -76,4 +77,3 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
   });
   assert.equal(r3.statusCode, 200);
 });
-

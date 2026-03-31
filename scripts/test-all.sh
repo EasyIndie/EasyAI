@@ -9,6 +9,7 @@ export NPM_CONFIG_AUDIT="${NPM_CONFIG_AUDIT-false}"
 echo "[1/4] oneapi-gateway: tests + doc-audit"
 cd "$root/oneapi-gateway"
 npm ci --no-fund --no-audit
+npm run build
 npm test
 npm run doc-audit
 

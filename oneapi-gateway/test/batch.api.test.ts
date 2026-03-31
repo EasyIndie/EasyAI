@@ -83,6 +83,7 @@ const baseCfg: Config = {
   appEnv: "test",
   port: 0,
   logLevel: "info",
+  trustProxy: false,
   adminUser: "admin",
   adminPass: "admin",
   authModes: new Set(["apikey"]),
@@ -149,4 +150,3 @@ test("batch: creates batch and output jsonl", async () => {
   assert.equal(r3.headers["content-type"]?.includes("application/jsonl"), true);
   assert.ok(r3.body.includes(`"idx":0`));
 });
-

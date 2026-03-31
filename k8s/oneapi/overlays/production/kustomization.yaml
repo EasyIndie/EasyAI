@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+secretGenerator:
+  - name: oneapi-secrets
+    behavior: replace
+    literals:
+      - ONEAPI_ADMIN_USER=REPLACE_ME
+      - ONEAPI_ADMIN_PASS=REPLACE_ME
+      - ONEAPI_API_KEYS=REPLACE_ME
+      - ONEAPI_UPSTREAMS=REPLACE_ME
+      - POSTGRES_USER=REPLACE_ME
+      - POSTGRES_PASSWORD=REPLACE_ME
+      - POSTGRES_DB=REPLACE_ME
+      - REDIS_URL=REPLACE_ME
+      - DATABASE_URL=REPLACE_ME
+
+patches:
+  - target:
+      kind: Deployment
+      name: oneapi
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: production

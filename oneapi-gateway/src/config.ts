@@ -6,6 +6,7 @@ export type Config = {
   appEnv: "development" | "staging" | "production" | "test";
   port: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
+  trustProxy: boolean | number;
   adminUser: string;
   adminPass: string;
   authModes: Set<AuthMode>;
@@ -52,6 +53,10 @@ export function loadConfig(): Config {
   const appEnv = ((process.env.APP_ENV ?? "development").trim().toLowerCase() as Config["appEnv"]) || "development";
   const port = Number(process.env.ONEAPI_PORT ?? "8080");
   const logLevel = (process.env.ONEAPI_LOG_LEVEL ?? "info") as Config["logLevel"];
+  const trustProxyEnabled = (process.env.ONEAPI_TRUST_PROXY ?? "0") === "1";
+  const trustProxyHopsRaw = process.env.ONEAPI_TRUST_PROXY_HOPS;
+  const trustProxyHops = trustProxyHopsRaw && trustProxyHopsRaw.trim().length ? Number(trustProxyHopsRaw) : undefined;
+  const trustProxy = trustProxyEnabled ? (Number.isFinite(trustProxyHops) ? (trustProxyHops as number) : true) : false;
 
   const authModes = new Set<AuthMode>(
     (process.env.ONEAPI_AUTH_MODE ?? "apikey")
@@ -159,6 +164,7 @@ export function loadConfig(): Config {
     appEnv,
     port,
     logLevel,
+    trustProxy,
     adminUser,
     adminPass,
     authModes,

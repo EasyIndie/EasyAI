@@ -7,6 +7,7 @@ const baseCfg: Config = {
   appEnv: "test",
   port: 8080,
   logLevel: "info",
+  trustProxy: false,
   adminUser: "admin",
   adminPass: "admin",
   authModes: new Set(["apikey"]),

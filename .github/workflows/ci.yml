@@ -17,11 +17,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: oneapi-gateway/package-lock.json
       - name: Install
         run: npm ci --no-fund --no-audit
+        working-directory: oneapi-gateway
+      - name: Build
+        run: npm run build
         working-directory: oneapi-gateway
       - name: Test
         run: npm test
@@ -41,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: oneapi-gateway/admin-ui/package-lock.json
       - name: Install
@@ -72,5 +75,9 @@ jobs:
           version: "v1.30.0"
       - name: Render kustomize (combined)
         run: kubectl kustomize k8s/combined >/dev/null
+      - name: Render kustomize (combined production overlay)
+        run: kubectl kustomize k8s/combined/overlays/production >/dev/null
       - name: Render kustomize (litellm)
         run: kubectl kustomize k8s/litellm >/dev/null
+      - name: Render kustomize (oneapi)
+        run: kubectl kustomize k8s/oneapi >/dev/null

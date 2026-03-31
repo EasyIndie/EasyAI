@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - redis.yaml
+  - postgres.yaml
+  - ollama.yaml
+  - litellm.yaml
+  - oneapi.yaml
+  - batch-worker.yaml
+  - networkpolicy-litellm.yaml
+  - networkpolicy-default-deny.yaml
+  - networkpolicy-default-deny-egress.yaml
+  - networkpolicy-allow-ingress.yaml
+  - networkpolicy-egress.yaml
+
+configMapGenerator:
+  - name: litellm-config
+    files:
+      - litellm.yaml=litellm-config.yaml
+
+secretGenerator:
+  - name: oneapi-secrets
+    literals:
+      - ONEAPI_ADMIN_USER=admin
+      - ONEAPI_ADMIN_PASS=admin
+      - ONEAPI_API_KEYS=dev-key
+      - ONEAPI_INTERNAL_TOKEN=dev-internal
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_USER=oneapi
+      - POSTGRES_PASSWORD=oneapi
+      - POSTGRES_DB=oneapi
+      - DATABASE_URL=postgres://oneapi:oneapi@postgres:5432/oneapi
+
+generatorOptions:
+  disableNameSuffixHash: true

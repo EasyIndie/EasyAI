@@ -1,0 +1,13 @@
+service:
+  default_timeout_ms: 20000
+  allowed_models:
+    - local/ollama:qwen2.5:0.5b
+
+providers:
+  ollama:
+    api_base_env: OLLAMA_HOST
+
+model_aliases:
+  local/ollama:qwen2.5:0.5b:
+    provider: ollama
+    model: qwen2.5:0.5b

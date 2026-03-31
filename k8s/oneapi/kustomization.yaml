@@ -2,17 +2,4 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../combined/redis.yaml
-  - ../combined/postgres.yaml
-  - ../combined/oneapi.yaml
-
-secretGenerator:
-  - name: oneapi-secrets
-    literals:
-      - ONEAPI_ADMIN_USER=admin
-      - ONEAPI_ADMIN_PASS=admin
-      - ONEAPI_API_KEYS=dev-key
-
-generatorOptions:
-  disableNameSuffixHash: true
-
+  - base

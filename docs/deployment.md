@@ -56,6 +56,16 @@ kubectl apply -k k8s/combined
 说明：
 - `k8s/combined` 默认包含单个 `ollama` 本地后端（更省资源）。
 - Batch 依赖 `ONEAPI_INTERNAL_TOKEN`，示例 secret 仅用于演示，真实环境请替换为安全值。
+ - `k8s/combined` 默认启用 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
+
+生产环境建议使用 overlay（避免示例默认值被误用）：
+
+```bash
+kubectl apply -k k8s/combined/overlays/production
+```
+
+该 overlay 会将 `APP_ENV` 设为 `production`，并要求你替换 `oneapi-secrets` 中的 `REPLACE_ME` 值。
+同时，production overlay 采用更严格的容器安全上下文（seccomp、drop capabilities、只读根文件系统等），如你的集群策略或镜像行为不兼容，可按需调整 overlay。
 
 ## 2. Standalone OneAPI Gateway
 
@@ -103,6 +113,12 @@ curl -sS -u admin:admin http://localhost:8080/admin/api/usage?sinceMinutes=60 | 
 
 ```bash
 kubectl apply -k k8s/oneapi
+```
+
+生产环境建议使用 overlay（避免示例默认值被误用）：
+
+```bash
+kubectl apply -k k8s/oneapi/overlays/production
 ```
 
 ## 3. Standalone LiteLLM Service

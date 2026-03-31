@@ -12,6 +12,9 @@
 - 不提交或维护 JavaScript 源码文件：`.js/.mjs/.cjs`
 - 工具脚本放在 `tools/` 下并使用 `.ts`
 
+Node 版本建议：
+- 推荐使用 Node 22（仓库根目录提供 `.nvmrc`）
+
 ## 2. 单元/集成测试
 
 ### 2.1 OneAPI Gateway
@@ -34,6 +37,8 @@ npm run build
 
 - 生产环境请设置 `APP_ENV=production`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
 - 如启用 Batch/内部调用鉴权（`ONEAPI_INTERNAL_TOKEN`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `ONEAPI_INTERNAL_TOKEN_ALLOW_CIDRS` 覆盖，或设置为 `any` 关闭限制）。
+- 如果网关部署在反向代理/Ingress/LB 后，需要按实际链路设置 `ONEAPI_TRUST_PROXY=1`（可选 `ONEAPI_TRUST_PROXY_HOPS=<n>`），以便基于真实客户端 IP 执行 internal token 的 CIDR 限制。
+- Kubernetes 默认启用 NetworkPolicy 安全基线（combined），如果你的集群未启用 CNI NetworkPolicy 或需额外放通（例如外部调用 litellm），需要按需调整策略。
 
 ### 3.1 依赖扫描
 

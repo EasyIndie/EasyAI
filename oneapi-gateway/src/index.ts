@@ -18,6 +18,7 @@ const cfg = loadConfig();
 const app = Fastify({
   logger: { level: cfg.logLevel },
   bodyLimit: 10 * 1024 * 1024,
+  trustProxy: cfg.trustProxy,
 });
 
 const redis = await createRedis(cfg.redisUrl);
