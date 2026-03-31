@@ -35,6 +35,108 @@ curl -sS http://localhost:8080/metrics | head
 
 ### 1.3 常用验收 curl
 
+### 1.3 标准验收 SOP（推荐）
+
+目标：把一次失败快速定位到 OneAPI / LiteLLM / Ollama 的哪一层，并覆盖 Trae 常用形态（非流式/流式、别名模型）。
+
+#### Step A：就绪检查（避免误判）
+
+1) 服务健康：
+
+```bash
+curl -sS http://localhost:8080/healthz
+curl -sS http://localhost:4000/healthz
+```
+
+2) 确认本地模型已拉取（否则可能出现 upstream error）：
+
+```bash
+docker compose exec -T ollama ollama list
+```
+
+如未拉取，执行：
+
+```bash
+curl http://localhost:11434/api/pull -d '{"name":"qwen2.5:0.5b"}'
+curl http://localhost:11434/api/pull -d '{"name":"qwen2.5-coder:1.5b"}'
+```
+
+3) 确认 LiteLLM 允许的模型列表包含目标模型：
+
+```bash
+curl -sS http://localhost:4000/v1/models | head
+```
+
+#### Step B：分层验证（定位责任方）
+
+1) 直打 LiteLLM（排除 OneAPI 转发因素）：
+
+```bash
+curl -sS http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Return only a TypeScript add(a,b) function."}],"temperature":0}' | head
+```
+
+2) 走 OneAPI（真实模型名）验证转发链路：
+
+```bash
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Same question, short answer."}],"temperature":0}' | head
+```
+
+3) 走 OneAPI（别名模型）验证 `ONEAPI_MODEL_MAP` 生效：
+
+```bash
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"coder","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}' | head
+```
+
+#### Step C：形态覆盖（Trae 常用）
+
+1) 非流式（stream:false 默认）已在 Step B 覆盖。
+
+2) 流式（SSE）：
+
+```bash
+curl -N http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"coder","messages":[{"role":"user","content":"Write a tiny TypeScript function."}],"temperature":0,"stream":true}'
+```
+
+3) 缓存验证（两次相同请求，关注 `X-Cache`）：
+
+```bash
+curl -N http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"chat","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
+
+curl -N http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"chat","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
+```
+
+#### Step D：失败时的最短诊断动作
+
+- 查看日志（按层定位）：
+
+```bash
+docker compose logs --tail=200 oneapi
+docker compose logs --tail=200 litellm
+docker compose logs --tail=200 ollama
+```
+
+- 常见现象与含义：
+  - `model not allowed`：LiteLLM 的 `allowed_models` 不包含目标模型，或 OneAPI model map 未生效（别名未被重写）
+  - `upstream error`：上游不可用、模型未拉取完成、资源不足或超时（优先看 litellm/ollama 日志）
+
 **基础转发（非流式）**
 
 ```bash
