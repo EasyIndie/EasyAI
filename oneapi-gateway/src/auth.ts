@@ -5,6 +5,45 @@ import type { Db } from "./db.ts";
 import { findActiveApiKeyByHash, findTenant } from "./db.ts";
 import type { RedisClient } from "./redis.ts";
 
+function normalizeIp(raw?: string): string | undefined {
+  if (!raw) return;
+  const ip = raw.trim();
+  if (!ip) return;
+  if (ip === "::1") return "127.0.0.1";
+  if (ip.startsWith("::ffff:")) return ip.slice("::ffff:".length);
+  return ip;
+}
+
+function ipv4ToInt(ip: string): number | undefined {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return;
+  let n = 0;
+  for (const p of parts) {
+    const v = Number(p);
+    if (!Number.isInteger(v) || v < 0 || v > 255) return;
+    n = (n << 8) | v;
+  }
+  return n >>> 0;
+}
+
+function ipInCidr(ip: string, cidr: string): boolean {
+  const [base, maskRaw] = cidr.split("/");
+  const mask = Number(maskRaw);
+  if (!base || !Number.isInteger(mask) || mask < 0 || mask > 32) return false;
+  const ipInt = ipv4ToInt(ip);
+  const baseInt = ipv4ToInt(base);
+  if (ipInt === undefined || baseInt === undefined) return false;
+  const m = mask === 0 ? 0 : (0xffffffff << (32 - mask)) >>> 0;
+  return (ipInt & m) === (baseInt & m);
+}
+
+function ipAllowed(ipRaw: string | undefined, allowCidrs: string[] | null | undefined): boolean {
+  if (allowCidrs === undefined || allowCidrs === null) return true;
+  const ip = normalizeIp(ipRaw);
+  if (!ip) return false;
+  return allowCidrs.some((c) => ipInCidr(ip, c));
+}
+
 export type AuthContext = {
   principal: string;
   authMode: "apikey" | "oauth";
@@ -59,10 +98,12 @@ export async function authenticate(
   headers: Record<string, string | string[] | undefined>,
   db?: Db,
   redis?: RedisClient,
+  reqIp?: string,
 ): Promise<AuthContext> {
   const internalHeader = headers["x-oneapi-internal-token"];
   const internalToken = Array.isArray(internalHeader) ? internalHeader[0] : internalHeader;
   if (cfg.internalToken && internalToken && internalToken === cfg.internalToken) {
+    if (!ipAllowed(reqIp, cfg.internalTokenAllowCidrs)) throw new Error("unauthorized");
     const pHeader = headers["x-oneapi-principal"];
     const principal = (Array.isArray(pHeader) ? pHeader[0] : pHeader)?.trim();
     if (!principal) throw new Error("missing principal");

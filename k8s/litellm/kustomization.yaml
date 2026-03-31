@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - ollama.yaml
   - litellm.yaml
+  - networkpolicy-litellm.yaml
 
 configMapGenerator:
   - name: litellm-config

@@ -48,7 +48,7 @@ await registerProxyRoutes(app, {
   redis,
   db,
   pool,
-  authenticateRequest: async (headers) => authenticate(cfg, oauth, headers, db, redis),
+  authenticateRequest: async (headers, reqIp) => authenticate(cfg, oauth, headers, db, redis, reqIp),
 });
 
 await registerBatchRoutes(app, cfg, db, redis, async (headers) => authenticate(cfg, oauth, headers, db, redis));

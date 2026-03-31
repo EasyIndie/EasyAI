@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --loader ts-node/esm src/index.ts",
+    "dev": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' src/index.ts",
     "build": "tsc -p tsconfig.json --noEmit",
-    "start": "node --loader ts-node/esm src/index.ts",
-    "test": "node --test --loader ts-node/esm test/**/*.test.ts",
+    "start": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' src/index.ts",
+    "test": "node --test --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' test/**/*.test.ts",
     "doc-audit": "ts-node --esm ../tools/doc-audit/check-docs.ts"
   },
   "dependencies": {
-    "@fastify/static": "^7.0.4",
+    "@fastify/static": "^9.0.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
     "jose": "^5.9.6",

@@ -33,6 +33,17 @@ spec:
               port: 4000
             initialDelaySeconds: 2
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
           resources:
             requests:
               cpu: 100m

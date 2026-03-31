@@ -4,6 +4,7 @@ import { authenticate } from "../src/auth.ts";
 import type { Config } from "../src/config.ts";
 
 const baseCfg: Config = {
+  appEnv: "test",
   port: 8080,
   logLevel: "info",
   adminUser: "admin",
@@ -36,4 +37,13 @@ test("authenticate: api key via bearer", async () => {
 
 test("authenticate: rejects invalid key", async () => {
   await assert.rejects(() => authenticate(baseCfg, undefined, { authorization: "Bearer nope" }));
+});
+
+test("authenticate: internal token requires allowed cidr when configured", async () => {
+  const cfg: Config = {
+    ...baseCfg,
+    internalToken: "t1",
+    internalTokenAllowCidrs: ["127.0.0.1/32"],
+  };
+  await assert.rejects(() => authenticate(cfg, undefined, { "x-oneapi-internal-token": "t1", "x-oneapi-principal": "p1" }, undefined, undefined, "8.8.8.8"));
 });

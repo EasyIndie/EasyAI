@@ -18,6 +18,8 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: APP_ENV
+              value: development
             - name: ONEAPI_PORT
               value: "8080"
             - name: ONEAPI_LOG_LEVEL
@@ -51,9 +53,15 @@ spec:
             - name: ONEAPI_GUARDRAILS_PII_MASK_ENABLED
               value: "1"
             - name: REDIS_URL
-              value: redis://redis:6379
+              valueFrom:
+                secretKeyRef:
+                  name: oneapi-secrets
+                  key: REDIS_URL
             - name: DATABASE_URL
-              value: postgres://oneapi:oneapi@postgres:5432/oneapi
+              valueFrom:
+                secretKeyRef:
+                  name: oneapi-secrets
+                  key: DATABASE_URL
             - name: ONEAPI_ADMIN_USER
               valueFrom:
                 secretKeyRef:
@@ -87,6 +95,17 @@ spec:
               port: 8080
             initialDelaySeconds: 2
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
           resources:
             requests:
               cpu: 100m

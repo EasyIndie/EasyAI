@@ -99,7 +99,7 @@ export type ProxyDeps = {
   redis: RedisClient;
   db: Db;
   pool: UpstreamPool;
-  authenticateRequest: (headers: Record<string, any>) => Promise<AuthContext>;
+  authenticateRequest: (headers: Record<string, any>, reqIp?: string) => Promise<AuthContext>;
 };
 
 export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps): Promise<void> {
@@ -119,7 +119,7 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
       let error: string | undefined;
 
       try {
-        auth = await deps.authenticateRequest(req.headers as any);
+        auth = await deps.authenticateRequest(req.headers as any, (req as any).ip);
         let body: unknown = req.body;
         if (body && typeof body === "object") {
           const m = (body as any).model;

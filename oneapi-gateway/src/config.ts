@@ -3,6 +3,7 @@ import process from "node:process";
 export type AuthMode = "apikey" | "oauth";
 
 export type Config = {
+  appEnv: "development" | "staging" | "production" | "test";
   port: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
   adminUser: string;
@@ -29,6 +30,7 @@ export type Config = {
     piiMaskEnabled: boolean;
   };
   internalToken?: string;
+  internalTokenAllowCidrs?: string[] | null;
   redisUrl: string;
   databaseUrl: string;
   modelMap: Record<string, string>;
@@ -47,6 +49,7 @@ function opt(name: string): string | undefined {
 }
 
 export function loadConfig(): Config {
+  const appEnv = ((process.env.APP_ENV ?? "development").trim().toLowerCase() as Config["appEnv"]) || "development";
   const port = Number(process.env.ONEAPI_PORT ?? "8080");
   const logLevel = (process.env.ONEAPI_LOG_LEVEL ?? "info") as Config["logLevel"];
 
@@ -82,22 +85,37 @@ export function loadConfig(): Config {
   const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
   const databaseUrl = process.env.DATABASE_URL ?? "postgres://oneapi:oneapi@localhost:5432/oneapi";
 
-  let modelMap: Record<string, string> = {};
-  const mm = opt("ONEAPI_MODEL_MAP");
-  if (mm) {
+  function parseJsonObject(name: string, raw?: string): any {
+    if (!raw) return undefined;
     try {
-      const parsed = JSON.parse(mm);
-      if (parsed && typeof parsed === "object") modelMap = parsed as Record<string, string>;
-    } catch {}
+      return JSON.parse(raw);
+    } catch (e: any) {
+      throw new Error(`Invalid JSON in ${name}: ${String(e?.message ?? e)}`);
+    }
   }
 
-  let fallbackMap: Record<string, string[]> = {};
-  const fm = opt("ONEAPI_FALLBACK_MAP");
-  if (fm) {
-    try {
-      const parsed = JSON.parse(fm);
-      if (parsed && typeof parsed === "object") fallbackMap = parsed as Record<string, string[]>;
-    } catch {}
+  const mm = parseJsonObject("ONEAPI_MODEL_MAP", opt("ONEAPI_MODEL_MAP"));
+  const modelMap: Record<string, string> = {};
+  if (mm !== undefined) {
+    if (!mm || typeof mm !== "object" || Array.isArray(mm)) throw new Error(`Invalid ONEAPI_MODEL_MAP: must be JSON object`);
+    for (const [k, v] of Object.entries(mm)) {
+      if (typeof k !== "string" || !k.trim()) throw new Error(`Invalid ONEAPI_MODEL_MAP key`);
+      if (typeof v !== "string" || !v.trim()) throw new Error(`Invalid ONEAPI_MODEL_MAP value for "${k}"`);
+      modelMap[k] = v;
+    }
+  }
+
+  const fm = parseJsonObject("ONEAPI_FALLBACK_MAP", opt("ONEAPI_FALLBACK_MAP"));
+  const fallbackMap: Record<string, string[]> = {};
+  if (fm !== undefined) {
+    if (!fm || typeof fm !== "object" || Array.isArray(fm)) throw new Error(`Invalid ONEAPI_FALLBACK_MAP: must be JSON object`);
+    for (const [k, v] of Object.entries(fm)) {
+      if (typeof k !== "string" || !k.trim()) throw new Error(`Invalid ONEAPI_FALLBACK_MAP key`);
+      if (!Array.isArray(v) || v.some((x) => typeof x !== "string" || !x.trim())) {
+        throw new Error(`Invalid ONEAPI_FALLBACK_MAP value for "${k}": must be string[]`);
+      }
+      fallbackMap[k] = v;
+    }
   }
 
   const guardEnabled = (process.env.ONEAPI_GUARDRAILS_ENABLED ?? "0") === "1";
@@ -112,12 +130,37 @@ export function loadConfig(): Config {
     : [];
 
   const internalToken = opt("ONEAPI_INTERNAL_TOKEN");
+  const allowCidrsRaw = opt("ONEAPI_INTERNAL_TOKEN_ALLOW_CIDRS");
+  let internalTokenAllowCidrs: string[] | null | undefined = undefined;
+  if (internalToken) {
+    if ((allowCidrsRaw ?? "").trim().toLowerCase() === "any") {
+      internalTokenAllowCidrs = null;
+    } else if (allowCidrsRaw && allowCidrsRaw.trim()) {
+      internalTokenAllowCidrs = allowCidrsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else {
+      internalTokenAllowCidrs = ["127.0.0.1/32", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"];
+    }
+  }
+
+  const adminUser = req("ONEAPI_ADMIN_USER").trim();
+  const adminPass = req("ONEAPI_ADMIN_PASS").trim();
+
+  if (appEnv === "production") {
+    if (adminUser === "admin" && adminPass === "admin") throw new Error(`Refusing to start with default admin credentials in production`);
+    if (apiKeys.has("dev-key")) throw new Error(`Refusing to start with ONEAPI_API_KEYS containing "dev-key" in production`);
+    if (internalToken === "dev-internal") throw new Error(`Refusing to start with ONEAPI_INTERNAL_TOKEN="dev-internal" in production`);
+    if (authModes.has("oauth") && !opt("ONEAPI_OAUTH_JWKS_URL")) throw new Error(`ONEAPI_OAUTH_JWKS_URL is required when ONEAPI_AUTH_MODE includes oauth`);
+  }
 
   return {
+    appEnv,
     port,
     logLevel,
-    adminUser: req("ONEAPI_ADMIN_USER"),
-    adminPass: req("ONEAPI_ADMIN_PASS"),
+    adminUser,
+    adminPass,
     authModes,
     apiKeys,
     oauth: {
@@ -140,6 +183,7 @@ export function loadConfig(): Config {
       piiMaskEnabled: guardPiiMaskEnabled,
     },
     internalToken,
+    internalTokenAllowCidrs,
     redisUrl,
     databaseUrl,
     modelMap,

@@ -58,6 +58,7 @@ test("proxy: forwards to upstream and caches", async () => {
   const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
 
   const cfg: Config = {
+    appEnv: "test",
     port: 0,
     logLevel: "info",
     adminUser: "admin",
@@ -90,7 +91,7 @@ test("proxy: forwards to upstream and caches", async () => {
     redis,
     db: dbStub,
     pool,
-    authenticateRequest: async (headers) => authenticate(cfg, undefined, headers),
+    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
   });
 
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -137,6 +138,7 @@ test("proxy: falls back to secondary model on upstream failure", async () => {
   const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
 
   const cfg: Config = {
+    appEnv: "test",
     port: 0,
     logLevel: "info",
     adminUser: "admin",
@@ -169,7 +171,7 @@ test("proxy: falls back to secondary model on upstream failure", async () => {
     redis,
     db: dbStub,
     pool,
-    authenticateRequest: async (headers) => authenticate(cfg, undefined, headers),
+    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
   });
 
   await app.listen({ host: "127.0.0.1", port: 0 });
@@ -204,6 +206,7 @@ test("proxy: forwards streaming requests and caches", async () => {
   const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
 
   const cfg: Config = {
+    appEnv: "test",
     port: 0,
     logLevel: "info",
     adminUser: "admin",
@@ -236,7 +239,7 @@ test("proxy: forwards streaming requests and caches", async () => {
     redis,
     db: dbStub,
     pool,
-    authenticateRequest: async (headers) => authenticate(cfg, undefined, headers),
+    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
   });
 
   await app.listen({ host: "127.0.0.1", port: 0 });

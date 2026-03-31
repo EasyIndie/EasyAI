@@ -41,6 +41,7 @@ services:
     build:
       context: ./oneapi-gateway
     environment:
+      APP_ENV: ${APP_ENV:-development}
       ONEAPI_PORT: ${ONEAPI_PORT:-8080}
       ONEAPI_LOG_LEVEL: ${ONEAPI_LOG_LEVEL:-info}
       ONEAPI_ADMIN_USER: ${ONEAPI_ADMIN_USER:-admin}
@@ -63,7 +64,8 @@ services:
       ONEAPI_GUARDRAILS_BLOCK_INTERNAL_IP: ${ONEAPI_GUARDRAILS_BLOCK_INTERNAL_IP:-1}
       ONEAPI_GUARDRAILS_INJECTION_KEYWORDS: ${ONEAPI_GUARDRAILS_INJECTION_KEYWORDS:-ignore all previous instructions,system prompt,developer message,jailbreak}
       ONEAPI_GUARDRAILS_PII_MASK_ENABLED: ${ONEAPI_GUARDRAILS_PII_MASK_ENABLED:-1}
-      ONEAPI_INTERNAL_TOKEN: ${ONEAPI_INTERNAL_TOKEN:-}
+      ONEAPI_INTERNAL_TOKEN: ${ONEAPI_INTERNAL_TOKEN:-dev-internal}
+      ONEAPI_INTERNAL_TOKEN_ALLOW_CIDRS: ${ONEAPI_INTERNAL_TOKEN_ALLOW_CIDRS:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       DATABASE_URL: ${DATABASE_URL:-postgres://oneapi:oneapi@postgres:5432/oneapi}
     ports:
@@ -80,7 +82,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       DATABASE_URL: ${DATABASE_URL:-postgres://oneapi:oneapi@postgres:5432/oneapi}
       ONEAPI_BASE_URL: ${ONEAPI_BASE_URL:-http://oneapi:8080}
-      ONEAPI_INTERNAL_TOKEN: ${ONEAPI_INTERNAL_TOKEN:-}
+      ONEAPI_INTERNAL_TOKEN: ${ONEAPI_INTERNAL_TOKEN:-dev-internal}
     depends_on:
       - redis
       - postgres

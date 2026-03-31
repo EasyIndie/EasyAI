@@ -39,18 +39,12 @@ async function main(): Promise<void> {
   const redisUrl = req("REDIS_URL");
   const databaseUrl = req("DATABASE_URL");
   const oneapiBaseUrl = req("ONEAPI_BASE_URL");
-  const internalToken = opt("ONEAPI_INTERNAL_TOKEN");
+  const internalToken = req("ONEAPI_INTERNAL_TOKEN");
   const pollSleepMs = Number(opt("BATCH_POLL_SLEEP_MS") ?? "200");
 
   const db = new pg.Pool({ connectionString: databaseUrl });
   const redis = createClient({ url: redisUrl });
   await redis.connect();
-
-  if (!internalToken) {
-    while (true) {
-      await sleep(10_000);
-    }
-  }
 
   while (true) {
     const popped = await redis.brPop("batch:q:v1", 1);

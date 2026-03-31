@@ -30,6 +30,11 @@ npm run build
 
 ## 3. 安全测试（基线）
 
+### 3.0 生产配置基线
+
+- 生产环境请设置 `APP_ENV=production`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
+- 如启用 Batch/内部调用鉴权（`ONEAPI_INTERNAL_TOKEN`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `ONEAPI_INTERNAL_TOKEN_ALLOW_CIDRS` 覆盖，或设置为 `any` 关闭限制）。
+
 ### 3.1 依赖扫描
 
 ```bash
@@ -64,4 +69,3 @@ docker run --rm --network host -t ghcr.io/zaproxy/zaproxy:stable \
 cd oneapi-gateway
 npm run doc-audit
 ```
-

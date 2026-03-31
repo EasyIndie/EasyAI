@@ -38,9 +38,43 @@ def _load_config(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
+def _validate_config(cfg: Dict[str, Any]) -> None:
+    service = cfg.get("service") or {}
+    if not isinstance(service, dict):
+        raise ValueError("service must be a map")
+    allowed = service.get("allowed_models") or []
+    if not isinstance(allowed, list) or any(not isinstance(x, str) or not x.strip() for x in allowed):
+        raise ValueError("service.allowed_models must be a non-empty list of strings")
+    aliases = cfg.get("model_aliases") or {}
+    if not isinstance(aliases, dict):
+        raise ValueError("model_aliases must be a map")
+    for m in allowed:
+        if m not in aliases:
+            raise ValueError(f"allowed_models includes '{m}' but model_aliases has no such key")
+    for name, alias in aliases.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("model_aliases keys must be non-empty strings")
+        if not isinstance(alias, dict):
+            raise ValueError(f"model_aliases['{name}'] must be a map")
+        backends = alias.get("backends")
+        if isinstance(backends, list):
+            if not backends:
+                raise ValueError(f"model_aliases['{name}'].backends must not be empty")
+            for b in backends:
+                if not isinstance(b, dict):
+                    raise ValueError(f"model_aliases['{name}'].backends items must be maps")
+                if not b.get("provider") or not b.get("model"):
+                    raise ValueError(f"backend for '{name}' must include provider and model")
+            continue
+        provider = alias.get("provider")
+        model = alias.get("model")
+        if not provider or not model:
+            raise ValueError(f"model_aliases['{name}'] must include provider and model (or backends)")
+
 
 CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/config/litellm.yaml")
 CONFIG = _load_config(CONFIG_PATH)
+_validate_config(CONFIG)
 
 
 _RR_COUNTERS: Dict[str, int] = {}
