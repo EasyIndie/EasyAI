@@ -68,6 +68,16 @@ curl -sS http://localhost:8080/v1/chat/completions \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
+推荐的本地测试默认模型（磁盘占用小、CPU 可跑）：
+- 通用对话：`local/ollama:qwen2.5:0.5b`
+- 编程任务：`local/ollama:qwen2.5-coder:1.5b`
+
+为减少业务侧配置成本，默认开启 `ONEAPI_MODEL_MAP` 映射：
+- `chat` → `local/ollama:qwen2.5:0.5b`
+- `coder` → `local/ollama:qwen2.5-coder:1.5b`
+
+因此业务侧可以直接把 `model` 写成 `chat` 或 `coder`（由网关自动重写为真实模型名）。
+
 ## 4. 核心能力说明（产品视角）
 
 ### 4.1 统一 OpenAI 兼容入口

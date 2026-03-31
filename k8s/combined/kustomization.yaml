@@ -5,7 +5,6 @@ resources:
   - redis.yaml
   - postgres.yaml
   - ollama.yaml
-  - ollama2.yaml
   - litellm.yaml
   - oneapi.yaml
   - batch-worker.yaml
@@ -13,7 +12,7 @@ resources:
 configMapGenerator:
   - name: litellm-config
     files:
-      - litellm.yaml=../../config/litellm/litellm.yaml
+      - litellm.yaml=litellm-config.yaml
 
 secretGenerator:
   - name: oneapi-secrets

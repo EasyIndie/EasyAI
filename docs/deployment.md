@@ -54,7 +54,7 @@ kubectl apply -k k8s/combined
 ```
 
 说明：
-- `k8s/combined` 默认包含 `ollama` 与 `ollama2` 两个后端，以匹配 LiteLLM 的 multi-backend 配置。
+- `k8s/combined` 默认包含单个 `ollama` 本地后端（更省资源）。
 - Batch 依赖 `ONEAPI_INTERNAL_TOKEN`，示例 secret 仅用于演示，真实环境请替换为安全值。
 
 ## 2. Standalone OneAPI Gateway
@@ -115,11 +115,8 @@ docker build -t easyai/litellm-service:latest .
 docker run --rm -p 4000:4000 \
   -e LITELLM_CONFIG_PATH=/app/config/litellm.yaml \
   -e OLLAMA_HOST=http://host.docker.internal:11434 \
-  -e OLLAMA_HOST_2=http://host.docker.internal:11435 \
   easyai/litellm-service:latest
 ```
-
-`OLLAMA_HOST_2` 是可选项，仅当 LiteLLM 配置启用了第二路后端时需要。
 
 验证：
 
@@ -140,6 +137,12 @@ kubectl apply -k k8s/litellm
 
 ```bash
 curl http://localhost:11434/api/pull -d '{"name":"qwen2.5:0.5b"}'
+```
+
+编程模型（轻量）示例：
+
+```bash
+curl http://localhost:11434/api/pull -d '{"name":"qwen2.5-coder:1.5b"}'
 ```
 
 ## 4. 配置入口

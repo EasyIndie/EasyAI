@@ -16,7 +16,7 @@ const API_KEY = __ENV.API_KEY || "dev-key";
 export default function () {
   const url = `${BASE_URL}/v1/chat/completions`;
   const payload = JSON.stringify({
-    model: "local/ollama:llama3.1",
+    model: "local/ollama:qwen2.5:0.5b",
     messages: [{ role: "user", content: "Ping" }],
     temperature: 0,
   });
@@ -31,4 +31,3 @@ export default function () {
   check(res, { "status 200": (r) => r.status === 200 });
   sleep(1);
 }
-

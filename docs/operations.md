@@ -44,6 +44,24 @@ curl -sS http://localhost:8080/v1/chat/completions \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
+**编程模型（轻量）**
+
+```bash
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}'
+```
+
+**使用默认模型别名（推荐）**
+
+```bash
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"coder","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}'
+```
+
 **Streaming + 缓存命中（两次相同请求）**
 
 ```bash
@@ -134,4 +152,3 @@ docker compose exec -T redis redis-cli LLEN 'batch:q:v1'
   - stream 缓存写入发生在完整 SSE 结束后（收到 `data: [DONE]`）
 - **Redis 不可用**
   - 限流、缓存、tenantcfg 缓存与 batch 队列都会退化/不可用
-

@@ -2,14 +2,13 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../combined/ollama.yaml
-  - ../combined/ollama2.yaml
-  - ../combined/litellm.yaml
+  - ollama.yaml
+  - litellm.yaml
 
 configMapGenerator:
   - name: litellm-config
     files:
-      - litellm.yaml=../../config/litellm/litellm.yaml
+      - litellm.yaml=litellm-config.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

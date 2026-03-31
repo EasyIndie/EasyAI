@@ -20,7 +20,7 @@ export default function () {
   const key = API_KEYS[__VU % API_KEYS.length];
   const url = `${BASE_URL}/v1/chat/completions`;
   const payload = JSON.stringify({
-    model: "local/ollama:llama3.1",
+    model: "local/ollama:qwen2.5:0.5b",
     messages: [{ role: "user", content: `Tenant ${__VU} hello` }],
     temperature: 0,
   });
@@ -35,4 +35,3 @@ export default function () {
   check(res, { "status 200": (r) => r.status === 200 });
   sleep(0.2);
 }
-

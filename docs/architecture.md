@@ -54,7 +54,6 @@ flowchart LR
 - Runtime env:
   - `LITELLM_CONFIG_PATH`
   - `OLLAMA_HOST`
-  - `OLLAMA_HOST_2` (optional, for multi-backend routing)
 
 ### OneAPI gateway settings
 - Env template: [oneapi.env.example](../config/oneapi/oneapi.env.example)

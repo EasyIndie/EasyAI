@@ -26,7 +26,7 @@ This directory contains a modular AI API service platform composed of:
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer dev-key" \
      -d '{
-       "model":"local/ollama:llama3.1",
+      "model":"local/ollama:qwen2.5:0.5b",
        "messages":[{"role":"user","content":"Hello!"}],
        "temperature":0
      }'
