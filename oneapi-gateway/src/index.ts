@@ -12,6 +12,7 @@ import { registerProxyRoutes } from "./proxy.ts";
 import { registerDashboard } from "./dashboard.ts";
 import { registerAdminApi } from "./admin.ts";
 import { registerBatchRoutes } from "./batch.ts";
+import { registerOpenApi } from "./openapi.ts";
 
 const cfg = loadConfig();
 
@@ -41,6 +42,7 @@ app.get("/metrics", async (_req, reply) => {
   return registry.metrics();
 });
 
+await registerOpenApi(app, cfg);
 await registerDashboard(app, cfg, db);
 await registerAdminApi(app, cfg, db, redis);
 

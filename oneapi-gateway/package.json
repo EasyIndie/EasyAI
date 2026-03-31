@@ -13,7 +13,7 @@
   "dependencies": {
     "@fastify/static": "^9.0.0",
     "dotenv": "^16.4.5",
-    "fastify": "^4.28.1",
+    "fastify": "^5.0.0",
     "jose": "^5.9.6",
     "pg": "8.14.1",
     "prom-client": "^15.1.3",
