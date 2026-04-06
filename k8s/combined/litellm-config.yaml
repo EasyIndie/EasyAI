@@ -3,6 +3,7 @@ service:
   allowed_models:
     - local/ollama:qwen2.5:0.5b
     - local/ollama:gemma4:e4b
+    - local/ollama:gemma4:e2b
 
 providers:
   ollama:
@@ -15,3 +16,6 @@ model_aliases:
   local/ollama:gemma4:e4b:
     provider: ollama
     model: gemma4:e4b
+  local/ollama:gemma4:e2b:
+    provider: ollama
+    model: gemma4:e2b

@@ -46,7 +46,7 @@ spec:
             - name: ONEAPI_CACHE_REPLAY_MAX_TOTAL_MS
               value: "0"
             - name: ONEAPI_MODEL_MAP
-              value: '{"chat":"local/ollama:qwen2.5:0.5b","coder":"local/ollama:qwen2.5-coder:1.5b","gemma4":"local/ollama:gemma4:e4b"}'
+              value: '{"chat":"local/ollama:qwen2.5:0.5b","coder":"local/ollama:qwen2.5-coder:1.5b","gemma4":"local/ollama:gemma4:e4b","gemma4_2b":"local/ollama:gemma4:e2b"}'
             - name: ONEAPI_GUARDRAILS_ENABLED
               value: "0"
             - name: ONEAPI_GUARDRAILS_BLOCK_INTERNAL_IP
