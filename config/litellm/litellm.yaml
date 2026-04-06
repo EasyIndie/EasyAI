@@ -1,5 +1,5 @@
 service:
-  default_timeout_ms: 20000
+  default_timeout_ms: 60000
   allowed_models:
     - local/ollama:qwen2.5:0.5b
     - local/ollama:qwen2.5-coder:1.5b
