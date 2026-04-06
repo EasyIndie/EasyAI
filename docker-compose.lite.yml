@@ -1,0 +1,25 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  litellm:
+    build:
+      context: ./litellm-service
+    environment:
+      LITELLM_PORT: ${LITELLM_PORT:-4000}
+      LITELLM_LOG_LEVEL: ${LITELLM_LOG_LEVEL:-info}
+      LITELLM_CONFIG_PATH: ${LITELLM_CONFIG_PATH:-/app/config/litellm.yaml}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config/litellm/litellm.yaml:/app/config/litellm.yaml
+    depends_on:
+      - ollama
+
+volumes:
+  ollama_data:
