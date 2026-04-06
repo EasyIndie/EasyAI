@@ -2,6 +2,7 @@ service:
   default_timeout_ms: 20000
   allowed_models:
     - local/ollama:qwen2.5:0.5b
+    - local/ollama:gemma4:e4b
 
 providers:
   ollama:
@@ -11,3 +12,6 @@ model_aliases:
   local/ollama:qwen2.5:0.5b:
     provider: ollama
     model: qwen2.5:0.5b
+  local/ollama:gemma4:e4b:
+    provider: ollama
+    model: gemma4:e4b
