@@ -45,8 +45,8 @@ curl -sS http://localhost:8080/v1/chat/completions \
 
 ### 1.2 Batch（默认启用，可选关闭）
 
-- 默认 Quickstart 已启用 Batch：`.env.example` 包含 `ONEAPI_INTERNAL_TOKEN` 且 compose 会启动 `batch_worker`。
-- 关闭 Batch：清空 `ONEAPI_INTERNAL_TOKEN`，并停止/不部署 `batch_worker`。未配置 token 时 `/v1/batches` 返回 503。
+- 默认 Quickstart 已启用 Batch：`config/oneapi/oneapi.yaml` 包含 `internal_token` 且 compose 会启动 `batch_worker`。
+- 关闭 Batch：清空 `internal_token`，并停止/不部署 `batch_worker`。未配置 token 时 `/v1/batches` 返回 503。
 
 ### 1.3 Kubernetes（kustomize）
 
@@ -63,7 +63,7 @@ kubectl apply -k k8s/combined
 
 说明：
 - `k8s/combined` 默认包含单个 `ollama` 本地后端（更省资源）。
-- Batch 依赖 `ONEAPI_INTERNAL_TOKEN`，示例 secret 仅用于演示，真实环境请替换为安全值。
+- Batch 依赖 `internal_token`，示例 secret 仅用于演示，真实环境请替换为安全值。
 - `k8s/combined` 默认启用 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
 
 生产环境建议使用 overlay（避免示例默认值被误用）：
@@ -96,19 +96,16 @@ docker build -t easyai/oneapi-gateway:latest .
 
 ```bash
 docker run --rm -p 8080:8080 \
-  -e ONEAPI_ADMIN_USER=admin \
-  -e ONEAPI_ADMIN_PASS=admin \
-  -e ONEAPI_AUTH_MODE=apikey \
-  -e ONEAPI_API_KEYS=dev-key \
-  -e ONEAPI_UPSTREAMS=http://your-upstream:4000 \
+  -v $(pwd)/config/oneapi/oneapi.yaml:/app/config/oneapi.yaml \
+  -e ONEAPI_CONFIG_PATH=/app/config/oneapi.yaml \
   -e REDIS_URL=redis://your-redis:6379 \
   -e DATABASE_URL=postgres://oneapi:oneapi@your-postgres:5432/oneapi \
   easyai/oneapi-gateway:latest
 ```
 
 可选：
-- 启用 Guardrails：`ONEAPI_GUARDRAILS_ENABLED=1`
-- 启用 Batch：`ONEAPI_INTERNAL_TOKEN=<secret>` 并运行 batch-worker
+- 启用 Guardrails：在 `oneapi.yaml` 中配置 `guardrails.enabled: true`
+- 启用 Batch：在 `oneapi.yaml` 中配置 `internal_token: <secret>` 并运行 batch-worker
 
 验证：
 

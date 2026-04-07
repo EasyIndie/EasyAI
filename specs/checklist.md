@@ -6,7 +6,7 @@
 - [x] 发送 `stream: true` 请求，检查 Redis 是否存入拼接后的文本。
 - [x] 第二次发送完全相同的 `stream: true` 请求，检查是否命中缓存。
 - [x] 验证命中缓存时，客户端是否依然呈现“打字机”分块下发效果。
-- [x] 配置回放节奏（如 `ONEAPI_CACHE_REPLAY_CHUNK_DELAY_MS`），验证回放速度是否按预期生效。
+- [x] 配置回放节奏（如 `cache.replay_chunk_delay_ms`），验证回放速度是否按预期生效。
 - [x] 验证 `temperature > 0` 时缓存是否被正确跳过（保持多样性）。
 
 ### 2. TTFT (首字延迟) 监控与指标导出

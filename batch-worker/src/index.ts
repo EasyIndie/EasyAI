@@ -1,5 +1,8 @@
 import pg from "pg";
 import { createClient } from "redis";
+import fs from "node:fs";
+import yaml from "js-yaml";
+import process from "node:process";
 
 type BatchRow = {
   batch_id: string;
@@ -13,15 +16,27 @@ type BatchItemRow = {
   request_json: string;
 };
 
-function req(name: string): string {
-  const v = process.env[name];
-  if (!v || !v.trim()) throw new Error(`Missing env: ${name}`);
-  return v.trim();
-}
-
-function opt(name: string): string | undefined {
-  const v = process.env[name];
-  return v && v.trim().length ? v.trim() : undefined;
+function loadConfig() {
+  const configPath = process.env.ONEAPI_CONFIG_PATH ?? "/app/config/oneapi.yaml";
+  if (!fs.existsSync(configPath)) {
+    throw new Error(`Configuration file not found: ${configPath}`);
+  }
+  const fileContents = fs.readFileSync(configPath, "utf8");
+  const parsed = yaml.load(fileContents) as any;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid YAML configuration");
+  }
+  
+  const redisUrl = parsed.redis_url ?? "redis://localhost:6379";
+  const databaseUrl = parsed.database_url ?? "postgres://oneapi:oneapi@localhost:5432/oneapi";
+  const internalToken = parsed.internal_token;
+  if (!internalToken) throw new Error("Missing internal_token in config");
+  
+  const bw = parsed.batch_worker || {};
+  const pollSleepMs = Number(bw.poll_sleep_ms ?? 200);
+  const oneapiBaseUrl = bw.oneapi_base_url ?? "http://localhost:8080";
+  
+  return { redisUrl, databaseUrl, internalToken, pollSleepMs, oneapiBaseUrl };
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -36,11 +51,7 @@ async function fetchJsonOrText(url: string, init: RequestInit): Promise<{ ok: bo
 }
 
 async function main(): Promise<void> {
-  const redisUrl = req("REDIS_URL");
-  const databaseUrl = req("DATABASE_URL");
-  const oneapiBaseUrl = req("ONEAPI_BASE_URL");
-  const internalToken = req("ONEAPI_INTERNAL_TOKEN");
-  const pollSleepMs = Number(opt("BATCH_POLL_SLEEP_MS") ?? "200");
+  const { redisUrl, databaseUrl, internalToken, pollSleepMs, oneapiBaseUrl } = loadConfig();
 
   const db = new pg.Pool({ connectionString: databaseUrl });
   const redis = createClient({ url: redisUrl });

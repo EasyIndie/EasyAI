@@ -272,9 +272,29 @@ async def chat_completions(body: Dict[str, Any] = Body(...), background_tasks: B
             )
 
             async def _stream_generator():
-                async for chunk in out:
-                    yield f"data: {json.dumps(chunk.model_dump() if hasattr(chunk, 'model_dump') else chunk, ensure_ascii=False)}\n\n"
-                yield "data: [DONE]\n\n"
+                try:
+                    async for chunk in out:
+                        yield f"data: {json.dumps(chunk.model_dump() if hasattr(chunk, 'model_dump') else chunk, ensure_ascii=False)}\n\n"
+                    yield "data: [DONE]\n\n"
+                except Exception as stream_err:
+                    logger.error(
+                        json.dumps(
+                            {
+                                "event": "chat_completion_stream_error",
+                                "request_id": req_id,
+                                "input_model": model,
+                                "resolved_model": resolved_model,
+                                "error": str(stream_err),
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                    status_code, msg = _parse_upstream_error(stream_err)
+                    if status_code == 507:
+                        background_tasks.add_task(_trigger_model_unload, resolved_model, api_base)
+                    
+                    yield f"data: {json.dumps({'error': {'message': msg, 'type': 'api_error'}})}\n\n"
+                    yield "data: [DONE]\n\n"
 
             return StreamingResponse(_stream_generator(), media_type="text/event-stream", headers=extra_headers)
 

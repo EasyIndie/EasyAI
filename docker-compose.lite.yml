@@ -10,10 +10,8 @@ services:
     build:
       context: ./litellm-service
     environment:
-      LITELLM_PORT: ${LITELLM_PORT:-4000}
-      LITELLM_LOG_LEVEL: ${LITELLM_LOG_LEVEL:-info}
-      LITELLM_CONFIG_PATH: ${LITELLM_CONFIG_PATH:-/app/config/litellm.yaml}
-      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      LITELLM_CONFIG_PATH: /app/config/litellm.yaml
+      OLLAMA_HOST: http://ollama:11434
     ports:
       - "4000:4000"
     volumes:

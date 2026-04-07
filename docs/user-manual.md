@@ -53,7 +53,7 @@ curl -sS http://localhost:8080/healthz
 ### 3.2 登录管理后台
 
 - 地址：`http://localhost:8080/dashboard`
-- 认证：HTTP Basic（`ONEAPI_ADMIN_USER` / `ONEAPI_ADMIN_PASS`）
+- 认证：HTTP Basic（`config/oneapi/oneapi.yaml` 中的 `admin_user` / `admin_pass`）
 
 ### 3.3 创建 API Key 并绑定租户
 
@@ -76,7 +76,7 @@ curl -sS http://localhost:8080/v1/chat/completions \
 - 通用对话：`local/ollama:qwen2.5:0.5b`
 - 编程任务：`local/ollama:qwen2.5-coder:1.5b`
 
-为减少业务侧配置成本，默认开启 `ONEAPI_MODEL_MAP` 映射：
+为减少业务侧配置成本，默认在 `oneapi.yaml` 开启 `model_map` 映射：
 - `chat` → `local/ollama:qwen2.5:0.5b`
 - `coder` → `local/ollama:qwen2.5-coder:1.5b`
 
@@ -116,12 +116,12 @@ curl -sS http://localhost:8080/v1/chat/completions \
 - `fixed`：每个 chunk 固定延迟
 - `original`：复刻上游真实 chunk 间隔（体验更像真实模型）
 
-关键配置：
-- `ONEAPI_CACHE_ENABLED`
-- `ONEAPI_CACHE_TTL_SECONDS`
-- `ONEAPI_CACHE_REPLAY_MODE=fixed|original`
-- `ONEAPI_CACHE_REPLAY_CHUNK_DELAY_MS`
-- `ONEAPI_CACHE_REPLAY_MAX_TOTAL_MS`
+关键配置：配置参数（在 `config/oneapi/oneapi.yaml` 中配置）：
+- `cache.enabled`
+- `cache.ttl_seconds`
+- `cache.replay_mode: "fixed" | "original"`
+- `cache.replay_chunk_delay_ms`
+- `cache.replay_max_total_ms`
 
 ### 4.4 可观测与审计
 
@@ -145,11 +145,11 @@ curl -sS http://localhost:8080/v1/chat/completions \
 - PII 脱敏（手机号/身份证/邮箱等）
 - 覆盖非流式、流式透传、缓存命中回放，避免敏感信息落盘/落缓存
 
-关键配置：
-- `ONEAPI_GUARDRAILS_ENABLED=0|1`
-- `ONEAPI_GUARDRAILS_BLOCK_INTERNAL_IP=0|1`
-- `ONEAPI_GUARDRAILS_INJECTION_KEYWORDS=...`
-- `ONEAPI_GUARDRAILS_PII_MASK_ENABLED=0|1`
+关键配置：配置参数（在 `config/oneapi/oneapi.yaml` 中配置）：
+- `guardrails.enabled: true | false`
+- `guardrails.block_internal_ip: true | false`
+- `guardrails.injection_keywords: [...]`
+- `guardrails.pii_mask_enabled: true | false`
 
 ### 4.6 批处理（Batch API）
 
@@ -162,9 +162,9 @@ curl -sS http://localhost:8080/v1/chat/completions \
 3. Worker 异步消费队列并执行子请求
 4. 客户端用 `batch_id` 查询进度并下载结果 JSONL
 
-关键配置：
-- `ONEAPI_INTERNAL_TOKEN`（启用 Batch 的必备开关）
-- `ONEAPI_BASE_URL`（worker 访问网关的内部地址）
+关键配置：相关配置（在 `config/oneapi/oneapi.yaml` 中配置）：
+- `internal_token`（启用 Batch 的必备开关）
+- `batch_worker.oneapi_base_url`（worker 访问网关的内部地址）
 
 ## 5. 典型 SOP（运营/运维）
 
@@ -188,7 +188,7 @@ curl -sS http://localhost:8080/v1/chat/completions \
 
 - 401：Key 不存在/禁用；或 OAuth 配置错误
 - 429：租户/Key 触发 RPM/TPM；调整配额或扩容上游
-- 503：上游不可用或 Batch 未配置 `ONEAPI_INTERNAL_TOKEN`
+- 503：上游不可用或 Batch 未配置 `internal_token`
 
 ## 6. 验收与排障入口
 
@@ -215,7 +215,7 @@ npm run doc-audit
 - OAuth/JWT：`Authorization: Bearer <jwt>`（JWKS/issuer/audience 按环境变量配置）
 
 缓存：
-- `ONEAPI_CACHE_ENABLED=1`
+- `config/oneapi/oneapi.yaml` 中的 `cache.enabled: true`
 - 典型命中条件：确定性请求（如 `temperature: 0`），请求体一致
 - `stream:true` 也可缓存，命中后支持回放节奏 `fixed|original`
 
@@ -225,7 +225,7 @@ npm run doc-audit
 - `GET /v1/batches/:batchId`
 - `GET /v1/batches/:batchId/output`
 
-Batch 需要配置 `ONEAPI_INTERNAL_TOKEN` 并运行 batch worker。
+Batch 需要在 `config/oneapi/oneapi.yaml` 中配置 `internal_token` 并运行 batch worker。
 
 ### 8.3 Admin（Dashboard API）
 

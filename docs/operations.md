@@ -7,20 +7,20 @@
 ### 1.1 关键环境变量（速查）
 
 **OneAPI Gateway**
-- `ONEAPI_ADMIN_USER` / `ONEAPI_ADMIN_PASS`：Dashboard 与 `/admin/api/*` 的 BasicAuth
-- `ONEAPI_AUTH_MODE`：`apikey` / `oauth`
-- `ONEAPI_API_KEYS`：兼容模式静态 key（可选；也可在 Dashboard 创建 DB key）
-- `ONEAPI_UPSTREAMS`：上游列表（默认指向 litellm）
-- `ONEAPI_RATE_LIMIT_RPM`：默认 RPM
-- `ONEAPI_CACHE_ENABLED` / `ONEAPI_CACHE_TTL_SECONDS`
-- `ONEAPI_CACHE_REPLAY_MODE=fixed|original` / `ONEAPI_CACHE_REPLAY_MAX_TOTAL_MS`
-- Guardrails：`ONEAPI_GUARDRAILS_*`
-- Batch：`ONEAPI_INTERNAL_TOKEN`（启用 batches 必配）
+- `admin_user` / `admin_pass`：Dashboard 与 `/admin/api/*` 的 BasicAuth
+- `auth_modes`：`apikey` / `oauth`
+- `api_keys`：兼容模式静态 key（可选；也可在 Dashboard 创建 DB key）
+- `upstreams`：上游列表（默认指向 litellm）
+- `rate_limit_rpm`：默认 RPM
+- `cache.enabled` / `cache.ttl_seconds`
+- `cache.replay_mode: "fixed" | "original"` / `cache.replay_max_total_ms`
+- Guardrails：`guardrails.*`
+- Batch：`internal_token`（启用 batches 必配）
 - `REDIS_URL` / `DATABASE_URL`
 
 **Batch Worker**
-- `ONEAPI_BASE_URL`：worker 调用网关的内部地址（compose 默认 `http://oneapi:8080`）
-- `ONEAPI_INTERNAL_TOKEN`：必须与网关一致
+- `batch_worker.oneapi_base_url`：worker 调用网关的内部地址（compose 默认 `http://oneapi:8080`）
+- `internal_token`：必须与网关一致
 
 ### 1.2 启动与健康检查
 
@@ -91,7 +91,7 @@ curl -sS http://localhost:8080/v1/chat/completions \
   -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Same question, short answer."}],"temperature":0}' | head
 ```
 
-3) 走 OneAPI（别名模型）验证 `ONEAPI_MODEL_MAP` 生效：
+3) 走 OneAPI（别名模型）验证 `model_map` 生效：
 
 ```bash
 curl -sS http://localhost:8080/v1/chat/completions \
@@ -242,18 +242,18 @@ docker compose exec -T redis redis-cli LLEN 'batch:q:v1'
 ### 2.3 常见问题与判断
 
 - **401 Unauthorized（/v1/*）**
-  - API key 模式：key 是否存在于 `ONEAPI_API_KEYS` 或数据库（Dashboard 创建）
-  - OAuth 模式：`ONEAPI_OAUTH_JWKS_URL` 是否可达、issuer/audience 是否匹配
+  - API key 模式：key 是否存在于 `api_keys` 或数据库（Dashboard 创建）
+  - OAuth 模式：`oauth.jwks_url` 是否可达、issuer/audience 是否匹配
 - **401 Unauthorized（/admin/api/* 写操作）**
   - 除 BasicAuth 外，写操作必须携带 `x-oneapi-admin-action: 1`
 - **429 Rate limited**
-  - 调整 `ONEAPI_RATE_LIMIT_RPM` 或在 Dashboard 调整 key/tenant 配额
+  - 调整 `rate_limit_rpm` 或在 Dashboard 调整 key/tenant 配额
   - tenant 绑定后按 tenant 聚合限流（同租户 key 共享）
 - **503（/v1/batches）**
-  - 未配置 `ONEAPI_INTERNAL_TOKEN`（Batch 未启用）
+  - 未配置 `internal_token`（Batch 未启用）
   - batch_worker 未运行或 token 不一致
 - **缓存 hit 不出现**
-  - `ONEAPI_CACHE_ENABLED=1`
+  - `cache.enabled: true`
   - 确定性请求（典型：`temperature=0`），且请求体一致
   - stream 缓存写入发生在完整 SSE 结束后（收到 `data: [DONE]`）
 - **Redis 不可用**

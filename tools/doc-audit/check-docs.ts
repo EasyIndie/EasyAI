@@ -63,7 +63,7 @@ function uniq<T>(arr: T[]): T[] {
 function extractEnvVarsFromText(s: string): string[] {
   const re = /\b[A-Z][A-Z0-9_]{2,}\b/g;
   const all = s.match(re) ?? [];
-  const allowPrefixes = ["ONEAPI_", "LITELLM_", "OLLAMA_", "REDIS_URL", "DATABASE_URL", "APP_ENV", "BASE_URL", "API_KEY", "API_KEYS"];
+  const allowPrefixes = ["LITELLM_", "OLLAMA_", "REDIS_URL", "DATABASE_URL", "APP_ENV", "BASE_URL", "API_KEY", "API_KEYS"];
   return uniq(all.filter((v) => allowPrefixes.some((p) => (p.endsWith("_") ? v.startsWith(p) : v === p))));
 }
 

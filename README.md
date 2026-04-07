@@ -13,7 +13,7 @@ This directory contains a modular AI API service platform composed of:
    cp .env.example .env
    ```
 
-2. Start services:
+2. Start services (It automatically loads configuration from `config/oneapi/oneapi.yaml`):
 
    ```bash
    docker compose up --build

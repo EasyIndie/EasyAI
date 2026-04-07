@@ -56,14 +56,14 @@ flowchart LR
   - `OLLAMA_HOST`
 
 ### OneAPI gateway settings
-- Env template: [oneapi.env.example](../config/oneapi/oneapi.env.example)
+- Config file: [config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
 - Key parameters:
-  - `ONEAPI_AUTH_MODE`, `ONEAPI_API_KEYS`
-  - `ONEAPI_OAUTH_JWKS_URL`, `ONEAPI_OAUTH_AUDIENCE`, `ONEAPI_OAUTH_ISSUER`
-  - `ONEAPI_UPSTREAMS`, `ONEAPI_UPSTREAM_TIMEOUT_MS`
-  - `ONEAPI_RATE_LIMIT_RPM`
-  - `ONEAPI_CACHE_ENABLED`, `ONEAPI_CACHE_TTL_SECONDS`
-  - `ONEAPI_MODEL_MAP`
+  - `auth_mode`, `api_keys`
+  - `oauth_jwks_url`, `oauth_audience`, `oauth_issuer`
+  - `upstreams`, `upstream_timeout_ms`
+  - `rate_limit_rpm`
+  - `cache_enabled`, `cache_ttl_seconds`
+  - `model_map`
 
 ### Combined operation parameters
 - Combined env template: [config/combined/env.example](../config/combined/env.example)

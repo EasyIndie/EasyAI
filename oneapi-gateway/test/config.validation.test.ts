@@ -1,46 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import yaml from "js-yaml";
 import { loadConfig } from "../src/config.ts";
 
-function withEnv(env: Record<string, string | undefined>, fn: () => void | Promise<void>) {
-  const prev: Record<string, string | undefined> = {};
-  for (const k of Object.keys(env)) prev[k] = process.env[k];
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
+async function withConfig(configObj: any, fn: () => void | Promise<void>) {
+  const tmpDir = os.tmpdir();
+  const tmpFile = path.join(tmpDir, `test-config-${Date.now()}-${Math.random()}.yaml`);
+  fs.writeFileSync(tmpFile, yaml.dump(configObj), "utf8");
+  
+  const prevPath = process.env.ONEAPI_CONFIG_PATH;
+  process.env.ONEAPI_CONFIG_PATH = tmpFile;
+  
+  try {
+    await fn();
+  } finally {
+    if (prevPath === undefined) delete process.env.ONEAPI_CONFIG_PATH;
+    else process.env.ONEAPI_CONFIG_PATH = prevPath;
+    fs.unlinkSync(tmpFile);
   }
-  const done = async () => {
-    for (const [k, v] of Object.entries(prev)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  };
-  const r = fn();
-  if (r && typeof (r as any).then === "function") return (r as Promise<void>).finally(done);
-  return done();
 }
 
-test("loadConfig: invalid ONEAPI_MODEL_MAP JSON throws", async () => {
-  await withEnv(
-    {
-      APP_ENV: "development",
-      ONEAPI_ADMIN_USER: "u",
-      ONEAPI_ADMIN_PASS: "p",
-      ONEAPI_MODEL_MAP: "{bad",
-    },
-    async () => {
-      assert.throws(() => loadConfig(), /Invalid JSON in ONEAPI_MODEL_MAP/);
-    },
-  );
-});
-
 test("loadConfig: production blocks default admin credentials", async () => {
-  await withEnv(
+  await withConfig(
     {
-      APP_ENV: "production",
-      ONEAPI_ADMIN_USER: "admin",
-      ONEAPI_ADMIN_PASS: "admin",
-      ONEAPI_API_KEYS: "k1",
+      app_env: "production",
+      admin_user: "admin",
+      admin_pass: "admin",
+      api_keys: ["k1"]
     },
     async () => {
       assert.throws(() => loadConfig(), /default admin credentials/i);
@@ -49,12 +38,12 @@ test("loadConfig: production blocks default admin credentials", async () => {
 });
 
 test("loadConfig: production blocks dev-key", async () => {
-  await withEnv(
+  await withConfig(
     {
-      APP_ENV: "production",
-      ONEAPI_ADMIN_USER: "u",
-      ONEAPI_ADMIN_PASS: "p",
-      ONEAPI_API_KEYS: "dev-key",
+      app_env: "production",
+      admin_user: "u",
+      admin_pass: "p",
+      api_keys: ["dev-key"]
     },
     async () => {
       assert.throws(() => loadConfig(), /dev-key/);
@@ -63,18 +52,19 @@ test("loadConfig: production blocks dev-key", async () => {
 });
 
 test("loadConfig: production requires JWKS when oauth enabled", async () => {
-  await withEnv(
+  await withConfig(
     {
-      APP_ENV: "production",
-      ONEAPI_ADMIN_USER: "u",
-      ONEAPI_ADMIN_PASS: "p",
-      ONEAPI_AUTH_MODE: "apikey,oauth",
-      ONEAPI_API_KEYS: "k1",
-      ONEAPI_OAUTH_JWKS_URL: "",
+      app_env: "production",
+      admin_user: "u",
+      admin_pass: "p",
+      auth_modes: ["apikey", "oauth"],
+      api_keys: ["k1"],
+      oauth: { jwks_url: "" }
     },
     async () => {
-      assert.throws(() => loadConfig(), /ONEAPI_OAUTH_JWKS_URL is required/);
+      assert.throws(() => loadConfig(), /oauth.jwks_url is required/);
     },
   );
 });
+
 
