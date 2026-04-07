@@ -4,6 +4,10 @@ type Tab = "usage" | "keys" | "tenants";
 
 type UsageRow = {
   principal: string;
+  auth_mode: string;
+  tenant_id: string | null;
+  api_key_id: number | null;
+  api_key_prefix: string | null;
   requests: number;
   errors: number;
   cached: number;
@@ -78,7 +82,7 @@ function TenantPicker(props: TenantPickerProps) {
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
           type="text"
-          placeholder="(none)"
+          placeholder="未绑定"
           value={open ? q : display}
           onFocus={() => {
             if (disabled) return;
@@ -137,7 +141,7 @@ function TenantPicker(props: TenantPickerProps) {
           disabled={disabled}
           style={{ width: "100%" }}
         />
-        {value ? <span style={{ color: "#666", fontSize: 12, whiteSpace: "nowrap" }}>{bound} keys</span> : null}
+        {value ? <span style={{ color: "#666", fontSize: 12, whiteSpace: "nowrap" }}>{bound} 个密钥</span> : null}
       </div>
 
       {open && !disabled ? (
@@ -172,7 +176,7 @@ function TenantPicker(props: TenantPickerProps) {
               background: active === -1 ? "#f6f7f8" : "#fff",
             }}
           >
-            (none)
+            未绑定
           </div>
           {items.map((t) => (
             <div
@@ -193,7 +197,7 @@ function TenantPicker(props: TenantPickerProps) {
               }}
             >
               <span>{t}</span>
-              <span style={{ color: "#666" }}>{boundCountByTenant.get(t) ?? 0} keys</span>
+              <span style={{ color: "#666" }}>{boundCountByTenant.get(t) ?? 0} 个密钥</span>
             </div>
           ))}
         </div>
@@ -217,69 +221,69 @@ export function App() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
 
   const title = useMemo(() => {
-    if (tab === "usage") return "Usage";
-    if (tab === "keys") return "API Keys";
-    return "Tenants";
+    if (tab === "usage") return "用量统计";
+    if (tab === "keys") return "API 密钥";
+    return "租户管理";
   }, [tab]);
 
   async function loadUsage() {
-    setStatus("Loading...");
+    setStatus("加载中...");
     try {
       const data = await fetchJson(`/admin/api/usage?sinceMinutes=${encodeURIComponent(String(sinceMinutes))}`);
       setUsageRows((data?.rows ?? []) as UsageRow[]);
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function loadKeys() {
-    setStatus("Loading...");
+    setStatus("加载中...");
     try {
       const data = await fetchJson("/admin/api/keys");
       setKeys((data?.keys ?? []) as ApiKeyRow[]);
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function loadTenants() {
-    setStatus("Loading...");
+    setStatus("加载中...");
     try {
       const data = await fetchJson("/admin/api/tenants");
       setTenants((data?.tenants ?? []) as TenantRow[]);
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function createKey() {
-    setStatus("Creating...");
+    setStatus("创建中...");
     try {
       const data = await fetchJson("/admin/api/keys", { method: "POST" });
       setCreatedKey(String(data?.api_key ?? ""));
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function revokeKey(id: number) {
-    setStatus("Revoking...");
+    setStatus("撤销中...");
     try {
       await fetchJson(`/admin/api/keys/${id}/revoke`, { method: "POST" });
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function deleteKey(id: number, force: boolean) {
-    setStatus("Deleting...");
+    setStatus("删除中...");
     try {
       await fetchJson(`/admin/api/keys/${id}`, {
         method: "DELETE",
@@ -287,14 +291,14 @@ export function App() {
         body: JSON.stringify({ force }),
       });
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function updateRpm(id: number, rpm: number | null) {
-    setStatus("Saving...");
+    setStatus("保存中...");
     try {
       await fetchJson(`/admin/api/keys/${id}/rpm`, {
         method: "PUT",
@@ -302,14 +306,14 @@ export function App() {
         body: JSON.stringify({ rpm_limit: rpm }),
       });
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function updateKeyTenant(id: number, tenantId: string | null) {
-    setStatus("Saving...");
+    setStatus("保存中...");
     try {
       await fetchJson(`/admin/api/keys/${id}/tenant`, {
         method: "PUT",
@@ -317,14 +321,14 @@ export function App() {
         body: JSON.stringify({ tenant_id: tenantId }),
       });
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function upsertTenant(tenantId: string, rpm: number | null, tpm: number | null, disabled: boolean) {
-    setStatus("Saving...");
+    setStatus("保存中...");
     try {
       await fetchJson(`/admin/api/tenants/${encodeURIComponent(tenantId)}`, {
         method: "PUT",
@@ -332,14 +336,14 @@ export function App() {
         body: JSON.stringify({ rpm_limit: rpm, tpm_limit: tpm, disabled }),
       });
       await loadTenants();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function deleteTenant(tenantId: string, force: boolean) {
-    setStatus("Deleting...");
+    setStatus("删除中...");
     try {
       await fetchJson(`/admin/api/tenants/${encodeURIComponent(tenantId)}`, {
         method: "DELETE",
@@ -348,21 +352,21 @@ export function App() {
       });
       await loadTenants();
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
   async function unbindTenantKeys(tenantId: string) {
-    setStatus("Unbinding...");
+    setStatus("解绑中...");
     try {
       await fetchJson(`/admin/api/tenants/${encodeURIComponent(tenantId)}/unbind_keys`, { method: "POST" });
       await loadTenants();
       await loadKeys();
-      setStatus("OK");
+      setStatus("成功");
     } catch (e: any) {
-      setStatus(e?.message ?? "Failed");
+      setStatus(e?.message ?? "失败");
     }
   }
 
@@ -411,7 +415,7 @@ export function App() {
       const id = String(k.id);
       const prefix = k.key_prefix.toLowerCase();
       const tenant = (k.tenant_id ?? "").toLowerCase();
-      const revoked = k.revoked_at ? "revoked" : "";
+      const revoked = k.revoked_at ? "已撤销" : "";
       return id.includes(q) || prefix.includes(q) || tenant.includes(q) || revoked.includes(q);
     });
   }, [keys, keySearch]);
@@ -426,16 +430,16 @@ export function App() {
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", margin: 24 }}>
-      <h1>OneAPI Admin</h1>
+      <h1>OneAPI 管理台</h1>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
         <button onClick={() => setTab("usage")} disabled={tab === "usage"}>
-          Usage
+          用量统计
         </button>
         <button onClick={() => setTab("keys")} disabled={tab === "keys"}>
-          API Keys
+          API 密钥
         </button>
         <button onClick={() => setTab("tenants")} disabled={tab === "tenants"}>
-          Tenants
+          租户管理
         </button>
         <span style={{ marginLeft: 8, color: "#666" }}>{status}</span>
       </div>
@@ -446,7 +450,7 @@ export function App() {
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
             <label>
-              Window (minutes):{" "}
+              时间窗口（分钟）：{" "}
               <input
                 type="number"
                 min={1}
@@ -455,13 +459,13 @@ export function App() {
                 onChange={(e) => setSinceMinutes(Number(e.target.value))}
               />
             </label>
-            <button onClick={loadUsage}>Refresh</button>
+            <button onClick={loadUsage}>刷新</button>
           </div>
 
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                {["Principal", "Requests", "Errors", "Cached", "P95 Latency (ms)", "Total Tokens"].map((h) => (
+                {["主体", "鉴权方式", "租户", "API 密钥", "请求数", "错误数", "缓存命中", "P95 延迟（毫秒）", "总 Tokens"].map((h) => (
                   <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
                     {h}
                   </th>
@@ -470,9 +474,25 @@ export function App() {
             </thead>
             <tbody>
               {usageRows.map((r) => (
-                <tr key={r.principal}>
+                <tr key={`${r.principal}:${r.auth_mode}:${r.tenant_id ?? ""}:${r.api_key_id ?? ""}`}>
                   <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
                     <code>{r.principal}</code>
+                  </td>
+                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                    <code>{r.auth_mode}</code>
+                  </td>
+                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                    {r.tenant_id ? <code>{r.tenant_id}</code> : <span style={{ color: "#999" }}>-</span>}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                    {r.api_key_id ? (
+                      <code>
+                        #{r.api_key_id}
+                        {r.api_key_prefix ? ` (${r.api_key_prefix})` : ""}
+                      </code>
+                    ) : (
+                      <span style={{ color: "#999" }}>-</span>
+                    )}
                   </td>
                   <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.requests}</td>
                   <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.errors}</td>
@@ -491,10 +511,10 @@ export function App() {
       {tab === "keys" ? (
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-            <button onClick={createKey}>Create Key</button>
+            <button onClick={createKey}>创建密钥</button>
             <input
               type="text"
-              placeholder="search keys"
+              placeholder="搜索密钥"
               value={keySearch}
               onChange={(e) => {
                 setKeySearch(e.currentTarget.value);
@@ -502,27 +522,27 @@ export function App() {
               }}
               style={{ marginLeft: 10 }}
             />
-            <button onClick={loadKeys}>Refresh</button>
+            <button onClick={loadKeys}>刷新</button>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
             <button onClick={() => setKeyPage(Math.max(1, keyPageClamped - 1))} disabled={keyPageClamped <= 1}>
-              Prev
+              上一页
             </button>
             <span style={{ color: "#666" }}>
-              Page {keyPageClamped} / {keyTotalPages} ({filteredKeys.length} keys)
+              第 {keyPageClamped} / {keyTotalPages} 页（共 {filteredKeys.length} 个密钥）
             </span>
             <button onClick={() => setKeyPage(Math.min(keyTotalPages, keyPageClamped + 1))} disabled={keyPageClamped >= keyTotalPages}>
-              Next
+              下一页
             </button>
           </div>
 
           {createdKey ? (
             <div style={{ marginBottom: 12, padding: 12, background: "#f6f7f8", borderRadius: 8 }}>
-              <div style={{ marginBottom: 6 }}>New API Key (shown once):</div>
+              <div style={{ marginBottom: 6 }}>新建 API 密钥（仅展示一次）：</div>
               <code>{createdKey}</code>
               <div style={{ marginTop: 10 }}>
-                <button onClick={() => setCreatedKey(null)}>Dismiss</button>
+                <button onClick={() => setCreatedKey(null)}>关闭</button>
               </div>
             </div>
           ) : null}
@@ -530,7 +550,7 @@ export function App() {
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                {["ID", "Prefix", "Created", "Revoked", "Tenant", "RPM Limit", "Actions"].map((h) => (
+                {["ID", "前缀", "创建时间", "撤销时间", "租户", "RPM 限制", "操作"].map((h) => (
                   <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
                     {h}
                   </th>
@@ -559,7 +579,7 @@ export function App() {
                     <input
                       type="number"
                       min={1}
-                      placeholder="inherit"
+                      placeholder="继承默认"
                       defaultValue={k.rpm_limit ?? undefined}
                       onBlur={(e) => {
                         const v = e.currentTarget.value.trim();
@@ -570,32 +590,32 @@ export function App() {
                   </td>
                   <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
                     <button onClick={() => revokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
-                      Revoke
+                      撤销
                     </button>
                     <button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
                         if (k.revoked_at) return;
                         if (!k.tenant_id) return;
-                        if (!confirm("Unbind tenant from this key?")) return;
+                        if (!confirm("确认解绑该密钥当前绑定的租户吗？")) return;
                         updateKeyTenant(k.id, null);
                       }}
                       disabled={Boolean(k.revoked_at) || !k.tenant_id}
                     >
-                      Unbind
+                      解绑
                     </button>
                     <button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
-                        if (!confirm("Delete this API key?")) return;
+                        if (!confirm("确认删除该 API 密钥吗？")) return;
                         const force = !k.revoked_at;
                         if (force) {
-                          if (!confirm("Key is not revoked. Force delete anyway?")) return;
+                          if (!confirm("该密钥尚未撤销，是否仍要强制删除？")) return;
                         }
                         deleteKey(k.id, force);
                       }}
                     >
-                      Delete
+                      删除
                     </button>
                   </td>
                 </tr>
@@ -610,7 +630,7 @@ export function App() {
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
             <input
               type="text"
-              placeholder="tenant id"
+              placeholder="租户 ID"
               value={newTenantId}
               onChange={(e) => setNewTenantId(e.target.value)}
             />
@@ -622,11 +642,11 @@ export function App() {
                 setNewTenantId("");
               }}
             >
-              Create/Upsert
+              创建或更新
             </button>
             <input
               type="text"
-              placeholder="search tenants"
+              placeholder="搜索租户"
               value={tenantSearch}
               onChange={(e) => {
                 setTenantSearch(e.currentTarget.value);
@@ -634,28 +654,28 @@ export function App() {
               }}
               style={{ marginLeft: 10 }}
             />
-            <button onClick={loadTenants}>Refresh</button>
+            <button onClick={loadTenants}>刷新</button>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
             <button onClick={() => setTenantPage(Math.max(1, tenantPageClamped - 1))} disabled={tenantPageClamped <= 1}>
-              Prev
+              上一页
             </button>
             <span style={{ color: "#666" }}>
-              Page {tenantPageClamped} / {tenantTotalPages} ({filteredTenants.length} tenants)
+              第 {tenantPageClamped} / {tenantTotalPages} 页（共 {filteredTenants.length} 个租户）
             </span>
             <button
               onClick={() => setTenantPage(Math.min(tenantTotalPages, tenantPageClamped + 1))}
               disabled={tenantPageClamped >= tenantTotalPages}
             >
-              Next
+              下一页
             </button>
           </div>
 
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr>
-                {["Tenant", "Created", "Bound Keys", "RPM Limit", "TPM Limit", "Disabled", "Actions"].map((h) => (
+                {["租户", "创建时间", "已绑定密钥", "RPM 限制", "TPM 限制", "禁用", "操作"].map((h) => (
                   <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
                     {h}
                   </th>
@@ -693,34 +713,34 @@ export function App() {
                         upsertTenant(t.tenant_id, rpm, tpm, dis);
                       }}
                     >
-                      Save
+                      保存
                     </button>
                     <button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
-                        if (!confirm(`Delete tenant "${t.tenant_id}"?`)) return;
+                        if (!confirm(`确认删除租户 "${t.tenant_id}" 吗？`)) return;
                         const bound = boundKeyCountByTenant.get(t.tenant_id) ?? 0;
                         if (bound > 0) {
-                          if (!confirm(`Tenant has ${bound} key(s) bound. Force delete (unbind all keys) anyway?`)) return;
+                          if (!confirm(`该租户仍绑定 ${bound} 个密钥，是否强制删除并解绑全部密钥？`)) return;
                           deleteTenant(t.tenant_id, true);
                           return;
                         }
                         deleteTenant(t.tenant_id, false);
                       }}
                     >
-                      Delete
+                      删除
                     </button>
                     <button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
                         const bound = boundKeyCountByTenant.get(t.tenant_id) ?? 0;
                         if (bound <= 0) return;
-                        if (!confirm(`Unbind all keys from tenant "${t.tenant_id}"?`)) return;
+                        if (!confirm(`确认解绑租户 "${t.tenant_id}" 下的全部密钥吗？`)) return;
                         unbindTenantKeys(t.tenant_id);
                       }}
                       disabled={(boundKeyCountByTenant.get(t.tenant_id) ?? 0) <= 0}
                     >
-                      Unbind Keys
+                      解绑全部密钥
                     </button>
                   </td>
                 </tr>

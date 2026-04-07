@@ -135,7 +135,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
           timer();
           await insertUsageEvent(deps.db, {
             principal: auth.principal,
+            apiKeyId: auth.apiKeyId,
             apiKeyHash: auth.apiKeyHash,
+            tenantId: auth.tenantId,
             authMode: auth.authMode,
             model: parseModelFromBody(body),
             endpoint: route,
@@ -154,7 +156,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
           timer();
           await insertUsageEvent(deps.db, {
             principal: auth.principal,
+            apiKeyId: auth.apiKeyId,
             apiKeyHash: auth.apiKeyHash,
+            tenantId: auth.tenantId,
             authMode: auth.authMode,
             model: parseModelFromBody(body),
             endpoint: route,
@@ -185,7 +189,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
           timer();
           await insertUsageEvent(deps.db, {
             principal: auth.principal,
+            apiKeyId: auth.apiKeyId,
             apiKeyHash: auth.apiKeyHash,
+            tenantId: auth.tenantId,
             authMode: auth.authMode,
             model: parseModelFromBody(body),
             endpoint: route,
@@ -310,7 +316,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
 
                     await insertUsageEvent(deps.db, {
                       principal: a.principal,
+              apiKeyId: a.apiKeyId,
                       apiKeyHash: a.apiKeyHash,
+              tenantId: a.tenantId,
                       authMode: a.authMode,
                       model: modelName,
                       endpoint: route,
@@ -346,7 +354,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
                 const safePayload = deps.cfg.guardrails.enabled && deps.cfg.guardrails.piiMaskEnabled ? maskPiiJson(payload) : payload;
                 await insertUsageEvent(deps.db, {
                   principal: a.principal,
+                  apiKeyId: a.apiKeyId,
                   apiKeyHash: a.apiKeyHash,
+                  tenantId: a.tenantId,
                   authMode: a.authMode,
                   model: modelName,
                   endpoint: route,
@@ -445,7 +455,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
           timer();
           await insertUsageEvent(deps.db, {
             principal: auth!.principal,
+            apiKeyId: auth!.apiKeyId,
             apiKeyHash: auth!.apiKeyHash,
+            tenantId: auth!.tenantId,
             authMode: auth!.authMode,
             model: finalModelUsed,
             endpoint: route,
@@ -577,7 +589,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
 
               await insertUsageEvent(deps.db, {
                 principal: auth!.principal,
+                apiKeyId: auth!.apiKeyId,
                 apiKeyHash: auth!.apiKeyHash,
+                tenantId: auth!.tenantId,
                 authMode: auth!.authMode,
                 model: finalModelUsed,
                 endpoint: route,
@@ -644,7 +658,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
           if (typeof tps === "number") tpsTokensPerSecond.labels(route, modelName, "false").observe(tps);
           await insertUsageEvent(deps.db, {
             principal: auth!.principal,
+            apiKeyId: auth!.apiKeyId,
             apiKeyHash: auth!.apiKeyHash,
+            tenantId: auth!.tenantId,
             authMode: auth!.authMode,
             model: finalModelUsed,
             endpoint: route,
@@ -675,7 +691,9 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
         if (auth) {
           await insertUsageEvent(deps.db, {
             principal: auth.principal,
+            apiKeyId: auth.apiKeyId,
             apiKeyHash: auth.apiKeyHash,
+            tenantId: auth.tenantId,
             authMode: auth.authMode,
             model: parseModelFromBody(req.body),
             endpoint: route,

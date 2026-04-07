@@ -48,6 +48,7 @@ export type AuthContext = {
   principal: string;
   authMode: "apikey" | "oauth";
   apiKeyHash?: string;
+  apiKeyId?: number;
   rpmLimit?: number | null;
   tenantId?: string | null;
   tenantRpmLimit?: number | null;
@@ -183,6 +184,7 @@ export async function authenticate(
         principal: `apikey:${apiKeyHash.slice(0, 12)}`,
         authMode: "apikey",
         apiKeyHash,
+        apiKeyId: row.id,
         rpmLimit: row.rpm_limit,
         tenantId: row.tenant_id,
         tenantRpmLimit,

@@ -22,7 +22,9 @@ async function migrate(pool: pg.Pool): Promise<void> {
       id bigserial primary key,
       ts timestamptz not null default now(),
       principal text not null,
+      api_key_id bigint,
       api_key_hash text,
+      tenant_id text,
       auth_mode text not null,
       model text,
       endpoint text not null,
@@ -50,10 +52,27 @@ async function migrate(pool: pg.Pool): Promise<void> {
       if not exists (select 1 from information_schema.columns where table_name='usage_events' and column_name='tps') then
         alter table usage_events add column tps double precision;
       end if;
+      if not exists (select 1 from information_schema.columns where table_name='usage_events' and column_name='api_key_id') then
+        alter table usage_events add column api_key_id bigint;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='usage_events' and column_name='tenant_id') then
+        alter table usage_events add column tenant_id text;
+      end if;
     end $$;
+  `);
+  await pool.query(`
+    update usage_events ue
+    set
+      api_key_id = ak.id,
+      tenant_id = coalesce(ue.tenant_id, ak.tenant_id)
+    from api_keys ak
+    where ue.api_key_id is null
+      and ue.api_key_hash = ak.key_hash
   `);
   await pool.query(`create index if not exists usage_events_ts_idx on usage_events(ts desc);`);
   await pool.query(`create index if not exists usage_events_principal_ts_idx on usage_events(principal, ts desc);`);
+  await pool.query(`create index if not exists usage_events_api_key_id_ts_idx on usage_events(api_key_id, ts desc);`);
+  await pool.query(`create index if not exists usage_events_tenant_id_ts_idx on usage_events(tenant_id, ts desc);`);
 
   await pool.query(`
     create table if not exists api_keys (
@@ -120,7 +139,9 @@ async function migrate(pool: pg.Pool): Promise<void> {
 
 export type UsageEvent = {
   principal: string;
+  apiKeyId?: number;
   apiKeyHash?: string;
+  tenantId?: string | null;
   authMode: string;
   model?: string;
   endpoint: string;
@@ -143,16 +164,18 @@ export async function insertUsageEvent(db: Db, e: UsageEvent): Promise<void> {
   await db.pool.query(
     `
     insert into usage_events (
-      principal, api_key_hash, auth_mode, model, endpoint, method, status, latency_ms, cached, upstream,
+      principal, api_key_id, api_key_hash, tenant_id, auth_mode, model, endpoint, method, status, latency_ms, cached, upstream,
       request_bytes, response_bytes, prompt_tokens, completion_tokens, total_tokens, error, ttft_ms, tps
     ) values (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-      $11,$12,$13,$14,$15,$16,$17,$18
+      $11,$12,$13,$14,$15,$16,$17,$18,$19,$20
     )
   `,
     [
       e.principal,
+      e.apiKeyId ?? null,
       e.apiKeyHash ?? null,
+      e.tenantId ?? null,
       e.authMode,
       e.model ?? null,
       e.endpoint,
@@ -175,6 +198,10 @@ export async function insertUsageEvent(db: Db, e: UsageEvent): Promise<void> {
 
 export type UsageSummaryRow = {
   principal: string;
+  auth_mode: string;
+  tenant_id: string | null;
+  api_key_id: number | null;
+  api_key_prefix: string | null;
   requests: number;
   errors: number;
   cached: number;
@@ -186,15 +213,20 @@ export async function getUsageSummary(db: Db, sinceMinutes: number): Promise<Usa
   const res = await db.pool.query(
     `
     select
-      principal,
+      ue.principal,
+      ue.auth_mode,
+      ue.tenant_id,
+      ue.api_key_id::bigint,
+      ak.key_prefix as api_key_prefix,
       count(*)::int as requests,
-      sum(case when status >= 400 then 1 else 0 end)::int as errors,
-      sum(case when cached then 1 else 0 end)::int as cached,
-      percentile_cont(0.95) within group (order by latency_ms)::float as p95_latency_ms,
-      sum(total_tokens)::bigint as total_tokens
-    from usage_events
-    where ts >= now() - ($1::text || ' minutes')::interval
-    group by principal
+      sum(case when ue.status >= 400 then 1 else 0 end)::int as errors,
+      sum(case when ue.cached then 1 else 0 end)::int as cached,
+      percentile_cont(0.95) within group (order by ue.latency_ms)::float as p95_latency_ms,
+      sum(ue.total_tokens)::bigint as total_tokens
+    from usage_events ue
+    left join api_keys ak on ak.id = ue.api_key_id
+    where ue.ts >= now() - ($1::text || ' minutes')::interval
+    group by ue.principal, ue.auth_mode, ue.tenant_id, ue.api_key_id, ak.key_prefix
     order by requests desc
     limit 200
   `,
@@ -274,19 +306,16 @@ export type TenantRow = {
 };
 
 export async function deleteApiKey(db: Db, id: number, force: boolean): Promise<"deleted" | "not_found" | "must_revoke"> {
-  if (force) {
-    const res = await db.pool.query(`delete from api_keys where id=$1`, [id]);
-    return res.rowCount === 1 ? "deleted" : "not_found";
-  }
-
-  const res = await db.pool.query(`delete from api_keys where id=$1 and revoked_at is not null`, [id]);
-  if (res.rowCount === 1) return "deleted";
-
-  const existsRes = await db.pool.query(`select id, revoked_at from api_keys where id=$1 limit 1`, [id]);
+  const existsRes = await db.pool.query(`select id, key_hash, revoked_at, tenant_id from api_keys where id=$1 limit 1`, [id]);
   if (!existsRes.rows?.length) return "not_found";
-  if (!existsRes.rows[0].revoked_at) return "must_revoke";
-  const res2 = await db.pool.query(`delete from api_keys where id=$1`, [id]);
-  return res2.rowCount === 1 ? "deleted" : "not_found";
+  const row = existsRes.rows[0];
+
+  if (!force && !row.revoked_at) return "must_revoke";
+
+  await db.pool.query(`delete from usage_events where api_key_id=$1`, [row.id]);
+  
+  const res = await db.pool.query(`delete from api_keys where id=$1`, [id]);
+  return res.rowCount === 1 ? "deleted" : "not_found";
 }
 
 export async function deleteTenant(
@@ -310,6 +339,7 @@ export async function deleteTenant(
 
     const keysRes = await db.pool.query(`select 1 from api_keys where tenant_id=$1 limit 1`, [tenantId]);
     if (keysRes.rows?.length) return "has_keys";
+    await db.pool.query(`delete from usage_events where tenant_id=$1`, [tenantId]);
     const res2 = await db.pool.query(`delete from tenants where tenant_id=$1`, [tenantId]);
     return res2.rowCount === 1 ? "deleted" : "not_found";
   }
@@ -317,6 +347,7 @@ export async function deleteTenant(
   const existsRes = await db.pool.query(`select tenant_id from tenants where tenant_id=$1 limit 1`, [tenantId]);
   if (!existsRes.rows?.length) return "not_found";
 
+  await db.pool.query(`delete from usage_events where tenant_id=$1`, [tenantId]);
   await db.pool.query(`update api_keys set tenant_id=null where tenant_id=$1`, [tenantId]);
   await db.pool.query(`delete from tenants where tenant_id=$1`, [tenantId]);
   return "deleted";
