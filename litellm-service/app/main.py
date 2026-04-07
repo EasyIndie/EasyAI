@@ -5,7 +5,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 import yaml
-from fastapi import Body, FastAPI, HTTPException, Request, Response
+from fastapi import Body, FastAPI, HTTPException, Request, Response, BackgroundTasks
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from litellm import acompletion, aembedding
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
@@ -178,7 +178,8 @@ async def list_models():
 def _validate_model(model: str):
     allowed = set(_allowed_models())
     if allowed and model not in allowed:
-        raise HTTPException(status_code=400, detail={"error": {"message": "model not allowed", "type": "invalid_request_error"}})
+        return JSONResponse(status_code=400, content={"error": {"message": "model not allowed", "type": "invalid_request_error"}})
+    return None
 
 
 def _stable_hash(payload: Any) -> str:
@@ -196,12 +197,45 @@ def _safe_json(value: Any) -> Any:
     return value
 
 
+def _parse_upstream_error(e: Exception) -> Tuple[int, str]:
+    err_str = str(e).lower()
+    if "cancel" in err_str or "disconnect" in err_str or "abort" in err_str:
+        return 499, f"Client Disconnected: The request was cancelled by the client before completion. (Details: {str(e)})"
+    if "connection timed out" in err_str or "timeout" in err_str:
+        return 504, f"Upstream timeout: The model took too long to respond. Please check if the model is loading or increase the timeout setting. (Details: {str(e)})"
+    if "connection refused" in err_str or "all connection attempts failed" in err_str or "errno -2" in err_str or "name or service not known" in err_str:
+        return 502, f"Upstream connection error: Failed to connect to upstream service. Please check if the upstream service is running. (Details: {str(e)})"
+    if "not found" in err_str:
+        return 404, f"Model not found: The requested model might not be pulled locally. Try running 'ollama pull <model_name>'. (Details: {str(e)})"
+    if "system memory" in err_str or "out of memory" in err_str or "oom" in err_str or "allocation failed" in err_str:
+        return 507, f"Insufficient memory: The system does not have enough memory to run this model. (Details: {str(e)})"
+    if "internal server error" in err_str or "server error" in err_str:
+        return 500, f"Upstream internal error: The model service encountered an internal error during generation. (Details: {str(e)})"
+    return 502, f"Upstream error: {str(e)}"
+
+
+async def _trigger_model_unload(model_name: str, api_base: Optional[str]) -> None:
+    import httpx
+    if not api_base:
+        return
+    logger.warning(f"Triggering auto-unload for model '{model_name}' due to OOM/Memory issue...")
+    try:
+        # According to Ollama API, setting keep_alive=0 will unload the model immediately
+        async with httpx.AsyncClient() as client:
+            payload = {"model": model_name.replace("ollama/", ""), "keep_alive": 0}
+            await client.post(f"{api_base}/api/generate", json=payload, timeout=5.0)
+        logger.info(f"Model '{model_name}' successfully unloaded to free up memory.")
+    except Exception as e:
+        logger.error(f"Failed to auto-unload model '{model_name}': {e}")
+
+
 @app.post("/v1/chat/completions")
-async def chat_completions(body: Dict[str, Any] = Body(...)):
+async def chat_completions(body: Dict[str, Any] = Body(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     model = body.get("model")
     if not isinstance(model, str) or not model:
-        raise HTTPException(status_code=400, detail={"error": {"message": "model is required", "type": "invalid_request_error"}})
-    _validate_model(model)
+        return JSONResponse(status_code=400, content={"error": {"message": "model is required", "type": "invalid_request_error"}})
+    err_resp = _validate_model(model)
+    if err_resp: return err_resp
 
     selector_key = _stable_hash({"m": model, "p": {k: body.get(k) for k in ("messages", "temperature", "top_p", "max_tokens")}})
     resolved_model, api_base = _resolve_model(model, selector_key)
@@ -273,15 +307,22 @@ async def chat_completions(body: Dict[str, Any] = Body(...)):
                 ensure_ascii=False,
             )
         )
-        raise HTTPException(status_code=502, detail={"error": {"message": "upstream error", "type": "api_error"}})
+        status_code, msg = _parse_upstream_error(e)
+        
+        # Self-healing logic: If OOM detected, trigger model unload in background
+        if status_code == 507:
+            background_tasks.add_task(_trigger_model_unload, resolved_model, api_base)
+            
+        return JSONResponse(status_code=status_code, content={"error": {"message": msg, "type": "api_error"}})
 
 
 @app.post("/v1/embeddings")
-async def embeddings(body: Dict[str, Any] = Body(...)):
+async def embeddings(body: Dict[str, Any] = Body(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     model = body.get("model")
     if not isinstance(model, str) or not model:
-        raise HTTPException(status_code=400, detail={"error": {"message": "model is required", "type": "invalid_request_error"}})
-    _validate_model(model)
+        return JSONResponse(status_code=400, content={"error": {"message": "model is required", "type": "invalid_request_error"}})
+    err_resp = _validate_model(model)
+    if err_resp: return err_resp
 
     selector_key = _stable_hash({"m": model, "p": {k: body.get(k) for k in ("input", "encoding_format")}})
     resolved_model, api_base = _resolve_model(model, selector_key)
@@ -329,4 +370,10 @@ async def embeddings(body: Dict[str, Any] = Body(...)):
                 ensure_ascii=False,
             )
         )
-        raise HTTPException(status_code=502, detail={"error": {"message": "upstream error", "type": "api_error"}})
+        status_code, msg = _parse_upstream_error(e)
+
+        # Self-healing logic: If OOM detected, trigger model unload in background
+        if status_code == 507:
+            background_tasks.add_task(_trigger_model_unload, resolved_model, api_base)
+
+        return JSONResponse(status_code=status_code, content={"error": {"message": msg, "type": "api_error"}})

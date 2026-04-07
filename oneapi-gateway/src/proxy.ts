@@ -456,7 +456,33 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
             upstream: upstreamUsed,
             error: error ?? "no_upstream",
           });
-          return reply.status(503).send({ error: { message: "no upstream available", type: "upstream_error" } });
+          
+          let parsedErrorMsg = "no upstream available: Failed to connect to any upstream service (e.g., litellm).";
+          let parsedErrorType = "upstream_error";
+          let details: any = error;
+          
+          if (lastText) {
+             try {
+                 const upstreamJson = JSON.parse(lastText);
+                 if (upstreamJson && upstreamJson.error) {
+                     parsedErrorMsg = upstreamJson.error.message || parsedErrorMsg;
+                     parsedErrorType = upstreamJson.error.type || parsedErrorType;
+                     details = upstreamJson.error.details || details;
+                     if (status === 503 && (parsedErrorMsg.includes("Model not found") || parsedErrorMsg.includes("Upstream connection error") || parsedErrorMsg.includes("Insufficient memory") || parsedErrorMsg.includes("Upstream internal error"))) {
+                        // pass through upstream status codes
+                        if (parsedErrorMsg.includes("Model not found")) status = 404;
+                        if (parsedErrorMsg.includes("Upstream connection error")) status = 502;
+                        if (parsedErrorMsg.includes("Insufficient memory")) status = 507;
+                        if (parsedErrorMsg.includes("Upstream internal error")) status = 500;
+                     }
+                 }
+             } catch(e) {}
+          } else if (error === "upstream_timeout") {
+             parsedErrorMsg = "upstream timeout: The gateway timed out waiting for the upstream service.";
+             status = 504;
+          }
+
+          return reply.status(status).send({ error: { message: parsedErrorMsg, type: parsedErrorType, details: details } });
         }
 
         const responseContentType = lastResponse.headers.get("content-type") ?? "application/json";
