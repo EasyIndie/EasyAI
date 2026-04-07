@@ -144,7 +144,7 @@ curl -sS http://localhost:8080/v1/chat/completions \
 - PII 脱敏（手机号/身份证/邮箱等）
 - 覆盖非流式、流式透传、缓存命中回放，避免敏感信息落盘/落缓存
 
-关键配置：配置参数（在 `config/oneapi/oneapi.yaml` 中配置）：
+关键配置（在 `config/oneapi/oneapi.yaml` 中配置）：
 - `guardrails.enabled: true | false`
 - `guardrails.block_internal_ip: true | false`
 - `guardrails.injection_keywords: [...]`
@@ -188,6 +188,41 @@ curl -sS http://localhost:8080/v1/chat/completions \
 - 401：Key 不存在/禁用；或 OAuth 配置错误
 - 429：租户/Key 触发 RPM/TPM；调整配额或扩容上游
 - 503：上游不可用或 Batch 未配置 `internal_token`
+
+### 5.4 一键清库与重置
+
+项目提供了一键清库脚本：[reset-db.sh](file:///Users/bytedance/Documents/EasyAI/scripts/reset-db.sh)
+
+适用场景：
+- 希望清空 Dashboard 用量统计
+- 希望重置租户、API Key、Batch 等业务数据
+- 希望在开发测试环境中快速回到干净状态
+
+常用命令：
+
+仅清空用量统计：
+
+```bash
+./scripts/reset-db.sh --usage-only
+```
+
+清空 OneAPI 业务表：
+
+```bash
+./scripts/reset-db.sh
+```
+
+清空 OneAPI 业务表并同时清空 Redis：
+
+```bash
+./scripts/reset-db.sh --all --with-redis
+```
+
+说明：
+- 脚本基于当前项目根目录的 `docker-compose.yml`
+- 默认会清空 `batch_items`、`batches`、`usage_events`、`api_keys`、`tenants`
+- 不会删除 Ollama 模型卷，不会删除代码和 YAML 配置
+- 如果您只想让 Dashboard 用量归零，请使用 `--usage-only`
 
 ## 6. 验收与排障入口
 

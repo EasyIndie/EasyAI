@@ -262,3 +262,85 @@ docker compose exec -T redis redis-cli LLEN 'batch:q:v1'
   - stream 缓存写入发生在完整 SSE 结束后（收到 `data: [DONE]`）
 - **Redis 不可用**
   - 限流、缓存、tenantcfg 缓存与 batch 队列都会退化/不可用
+
+## 3. 数据清理与重置
+
+项目已提供一键清库脚本：[reset-db.sh](file:///Users/bytedance/Documents/EasyAI/scripts/reset-db.sh)
+
+### 3.1 脚本用途
+
+- 作用于当前项目的 `docker-compose.yml`
+- 清理 Postgres 中的 OneAPI 业务数据
+- 可选同时清理 Redis 缓存和限流计数
+- 不会删除 Ollama 模型卷，不会删除源码或 YAML 配置
+
+### 3.2 常用命令
+
+仅清空用量统计：
+
+```bash
+./scripts/reset-db.sh --usage-only
+```
+
+清空 OneAPI 业务表：
+
+```bash
+./scripts/reset-db.sh
+```
+
+清空 OneAPI 业务表并同时清空 Redis：
+
+```bash
+./scripts/reset-db.sh --all --with-redis
+```
+
+跳过确认提示：
+
+```bash
+./scripts/reset-db.sh --all --with-redis --yes
+```
+
+查看脚本帮助：
+
+```bash
+./scripts/reset-db.sh --help
+```
+
+停止并删除当前项目容器（保留数据库卷与 Ollama 模型卷）：
+
+```bash
+docker compose down
+```
+
+停止容器并删除 Postgres 数据卷，下次启动后数据库会重新初始化：
+
+```bash
+docker compose down && docker volume rm easyai_postgres_data
+```
+
+停止容器、删除 Postgres 数据卷并重新构建启动服务：
+
+```bash
+docker compose down && docker volume rm easyai_postgres_data && docker compose up -d --build
+```
+
+### 3.3 默认清空范围
+
+- `batch_items`
+- `batches`
+- `usage_events`
+- `api_keys`
+- `tenants`
+
+### 3.4 执行行为
+
+脚本会自动执行以下步骤：
+
+1. 停止 `oneapi` 和 `batch_worker`
+2. 清空 Postgres 中目标表
+3. 按需清空 Redis
+4. 重新启动 `oneapi` 和 `batch_worker`
+
+如果您只想让 Dashboard 用量归零，而保留租户和 API Key，请使用 `--usage-only`。
+
+如需直接清理 Docker 容器，请优先使用上面的精确命令，不要直接执行 `docker compose down -v`，否则会连同 `ollama_data` 模型卷一起删除，已拉取的本地模型也会丢失。
