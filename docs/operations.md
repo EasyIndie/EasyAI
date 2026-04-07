@@ -4,9 +4,9 @@
 
 ## 1. 发布前检查（Preflight）
 
-### 1.1 关键环境变量（速查）
+### 1.1 关键配置项（速查）
 
-**OneAPI Gateway**
+**OneAPI Gateway (在 `config/oneapi/oneapi.yaml` 中)**
 - `admin_user` / `admin_pass`：Dashboard 与 `/admin/api/*` 的 BasicAuth
 - `auth_modes`：`apikey` / `oauth`
 - `api_keys`：兼容模式静态 key（可选；也可在 Dashboard 创建 DB key）
@@ -18,7 +18,7 @@
 - Batch：`internal_token`（启用 batches 必配）
 - `REDIS_URL` / `DATABASE_URL`
 
-**Batch Worker**
+**Batch Worker (也在 `oneapi.yaml` 中)**
 - `batch_worker.oneapi_base_url`：worker 调用网关的内部地址（compose 默认 `http://oneapi:8080`）
 - `internal_token`：必须与网关一致
 
@@ -138,8 +138,12 @@ docker compose logs --tail=200 ollama
 ```
 
 - 常见现象与含义：
-  - `model not allowed`：LiteLLM 的 `allowed_models` 不包含目标模型，或 OneAPI model map 未生效（别名未被重写）
-  - `upstream error`：上游不可用、模型未拉取完成、资源不足或超时（优先看 litellm/ollama 日志）
+  - `model not allowed` (400)：LiteLLM 的 `allowed_models` 不包含目标模型，或 OneAPI model map 未配置别名。
+  - `Model not found` (404)：模型名称正确，但底层的 Ollama 未拉取该模型（执行 `ollama pull`）。
+  - `Upstream connection error` (502)：Ollama 容器未启动或网络不通。
+  - `Upstream timeout` (504)：模型加载或生成耗时过长，超出 `litellm.yaml` 中配置的超时时间。
+  - `Insufficient memory` (507)：宿主机/容器可用内存不足以加载该模型（LiteLLM 捕获后会在后台尝试自愈清理）。
+  - `Client Disconnected` (499)：客户端（如浏览器/curl）主动中断了请求，通常表现为流式生成意外停止。
 
 **基础转发（非流式）**
 

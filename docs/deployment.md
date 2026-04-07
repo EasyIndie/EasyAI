@@ -1,36 +1,30 @@
 # 部署指南（Deployment）
 
-本文档聚合本仓库的部署方式，包含：
-- Combined（OneAPI → LiteLLM）一键部署
-- Standalone（单独部署 OneAPI 或 LiteLLM）
-- Docker / Kubernetes（kustomize）
+本文档汇总本仓库支持的部署方式，包含：
+- **Combined 模式**（完整部署：OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker）
+- **Lite 模式**（轻量推理：仅部署 LiteLLM + Ollama）
+- **Kubernetes 部署**（kustomize）
 
-## 1. Combined Mode（推荐）
+## 1. Combined 模式（完整版）
+
+此模式适合在生产环境中提供完整的 API 管理、鉴权、限流、审计以及异步任务（Batch）功能。
 
 ### 1.1 Docker Compose
 
-在仓库根目录：
+在仓库根目录直接运行：
 
 ```bash
-cp .env.example .env
 docker compose up -d --build
 ```
 
-验证：
+验证网关与代理层是否正常启动：
 
 ```bash
 curl -sS http://localhost:8080/healthz
 curl -sS http://localhost:4000/healthz
 ```
 
-查看用户侧 API 文档（Swagger UI / OpenAPI）：
-
-```bash
-open http://localhost:8080/docs
-curl -sS http://localhost:8080/openapi.json | head
-```
-
-通过网关发起一次请求：
+通过网关发起一次测试请求：
 
 ```bash
 curl -sS http://localhost:8080/v1/chat/completions \
@@ -43,132 +37,83 @@ curl -sS http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-### 1.2 Batch（默认启用，可选关闭）
+### 1.2 Batch 异步任务服务
 
-- 默认 Quickstart 已启用 Batch：`config/oneapi/oneapi.yaml` 包含 `internal_token` 且 compose 会启动 `batch_worker`。
-- 关闭 Batch：清空 `internal_token`，并停止/不部署 `batch_worker`。未配置 token 时 `/v1/batches` 返回 503。
+- 默认在 Combined 模式中已启用：`config/oneapi/oneapi.yaml` 包含 `internal_token` 且 compose 会自动启动 `batch_worker` 容器。
+- 若需关闭 Batch 功能：清空 YAML 配置中的 `internal_token`，并在 compose 中移除/停止 `batch_worker`。未配置 token 时访问 `/v1/batches` 会返回 503 错误。
 
-### 1.3 Kubernetes（kustomize）
+---
 
-1) 构建并推送镜像（按需）：
+## 2. Lite 模式（轻量版）
+
+此模式去除了所有网关管理和数据库组件，仅启动纯粹的模型推理环境，适合个人开发测试或内网纯计算节点。详细说明请参考 [Lite 轻量模式：快速启动与排障指南](./lite-mode-quickstart.md)。
+
+### 2.1 Docker Compose
+
+在仓库根目录运行：
+
+```bash
+docker compose -f docker-compose.lite.yml up -d --build
+```
+
+验证 LiteLLM 代理层是否正常启动：
+
+```bash
+curl -sS http://localhost:4000/healthz
+```
+
+直接向 LiteLLM 发起测试请求（无需 API Key，需使用配置全称）：
+
+```bash
+curl -sS http://localhost:4000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"local/ollama:qwen2.5:0.5b",
+    "messages":[{"role":"user","content":"Say hello in one sentence."}],
+    "temperature":0
+  }'
+```
+
+---
+
+## 3. Kubernetes (Kustomize) 部署
+
+对于需要在 K8s 集群中运行的用户，本项目提供了现成的 Kustomize 编排清单。
+
+### 3.1 镜像准备
+
+请提前构建并推送以下镜像至您的集群可用镜像仓库：
 - `easyai/litellm-service:latest`
 - `easyai/oneapi-gateway:latest`
-- `easyai/batch-worker:latest`（可选，Batch 需要）
+- `easyai/batch-worker:latest`
 
-2) 部署：
+### 3.2 部署 Combined 模式
 
 ```bash
 kubectl apply -k k8s/combined
 ```
 
-说明：
-- `k8s/combined` 默认包含单个 `ollama` 本地后端（更省资源）。
-- Batch 依赖 `internal_token`，示例 secret 仅用于演示，真实环境请替换为安全值。
-- `k8s/combined` 默认启用 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
+**说明**：
+- `k8s/combined` 默认包含本地的 `ollama` 后端。
+- `k8s/combined` 默认启用了 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
+- 部署后，配置将通过 ConfigMap 自动从您项目中的 `oneapi.yaml` 和 `litellm.yaml` 加载。
 
-生产环境建议使用 overlay（避免示例默认值被误用）：
+### 3.3 生产环境叠加层 (Overlays)
+
+对于真实的生产环境，强烈建议使用 overlay 以覆盖默认的示例凭证和端口配置：
 
 ```bash
 kubectl apply -k k8s/combined/overlays/production
 ```
 
-该 overlay 会将 `APP_ENV` 设为 `production`，并要求你替换 `oneapi-secrets` 中的 `REPLACE_ME` 值。
-同时，production overlay 采用更严格的容器安全上下文（seccomp、drop capabilities、只读根文件系统等），如你的集群策略或镜像行为不兼容，可按需调整 overlay。
+**安全强化**：
+Production overlay 会将环境设置为 `production`，并采用更严格的容器安全上下文（seccomp、drop capabilities、只读根文件系统等）。如果您的集群策略或镜像行为不兼容，请按需调整 overlay 清单。
 
-## 2. Standalone OneAPI Gateway
+---
 
-### 2.1 依赖
+## 4. 配置文件入口
 
-- Redis（限流/缓存/部分动态配置）
-- Postgres（usage_events 用量审计与 Dashboard 数据源）
-- 一个或多个 OpenAI-compatible 上游（例如本仓库 LiteLLM）
+系统的所有行为均通过以下两个 YAML 文件集中控制，不再依赖环境 (`.env`) 文件：
 
-### 2.2 Docker
-
-构建：
-
-```bash
-cd oneapi-gateway
-docker build -t easyai/oneapi-gateway:latest .
-```
-
-运行（示例指向远端上游）：
-
-```bash
-docker run --rm -p 8080:8080 \
-  -v $(pwd)/config/oneapi/oneapi.yaml:/app/config/oneapi.yaml \
-  -e ONEAPI_CONFIG_PATH=/app/config/oneapi.yaml \
-  -e REDIS_URL=redis://your-redis:6379 \
-  -e DATABASE_URL=postgres://oneapi:oneapi@your-postgres:5432/oneapi \
-  easyai/oneapi-gateway:latest
-```
-
-可选：
-- 启用 Guardrails：在 `oneapi.yaml` 中配置 `guardrails.enabled: true`
-- 启用 Batch：在 `oneapi.yaml` 中配置 `internal_token: <secret>` 并运行 batch-worker
-
-验证：
-
-```bash
-curl -sS http://localhost:8080/healthz
-open http://localhost:8080/docs
-curl -sS -u admin:admin http://localhost:8080/admin/api/usage?sinceMinutes=60 | head
-```
-
-### 2.3 Kubernetes（kustomize）
-
-```bash
-kubectl apply -k k8s/oneapi
-```
-
-生产环境建议使用 overlay（避免示例默认值被误用）：
-
-```bash
-kubectl apply -k k8s/oneapi/overlays/production
-```
-
-## 3. Standalone LiteLLM Service
-
-### 3.1 Docker
-
-```bash
-cd litellm-service
-docker build -t easyai/litellm-service:latest .
-docker run --rm -p 4000:4000 \
-  -e LITELLM_CONFIG_PATH=/app/config/litellm.yaml \
-  -e OLLAMA_HOST=http://host.docker.internal:11434 \
-  easyai/litellm-service:latest
-```
-
-验证：
-
-```bash
-curl -sS http://localhost:4000/healthz
-curl -sS http://localhost:4000/v1/models | head
-```
-
-### 3.2 Kubernetes（kustomize）
-
-```bash
-kubectl apply -k k8s/litellm
-```
-
-### 3.3 本地模型（Ollama）
-
-预拉取模型示例：
-
-```bash
-curl http://localhost:11434/api/pull -d '{"name":"qwen2.5:0.5b"}'
-```
-
-编程模型（轻量）示例：
-
-```bash
-curl http://localhost:11434/api/pull -d '{"name":"qwen2.5-coder:1.5b"}'
-```
-
-## 4. 配置入口
-
-- OneAPI env（示例）：[oneapi.env.example](file:///Users/bytedance/Documents/EasyAI/config/oneapi/oneapi.env.example)
-- Combined env（示例）：[env.example](file:///Users/bytedance/Documents/EasyAI/config/combined/env.example)
-- LiteLLM 配置：[litellm.yaml](file:///Users/bytedance/Documents/EasyAI/config/litellm/litellm.yaml)
+- **OneAPI 网关配置**：[config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
+- **LiteLLM 代理配置**：[config/litellm/litellm.yaml](../config/litellm/litellm.yaml)

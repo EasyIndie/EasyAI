@@ -35,7 +35,7 @@ npm run build
 
 ### 3.0 生产配置基线
 
-- 生产环境请设置 `APP_ENV=production`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
+- 生产环境请在 `oneapi.yaml` 中设置 `app_env: "production"`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
 - 如启用 Batch/内部调用鉴权（`internal_token`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `internal_token_allow_cidrs` 覆盖，或设置为 `any` 关闭限制）。
 - 如果网关部署在反向代理/Ingress/LB 后，需要按实际链路设置 `trust_proxy: true`（可选配置跳数），以便基于真实客户端 IP 执行 internal token 的 CIDR 限制。
 - Kubernetes 默认启用 NetworkPolicy 安全基线（combined），如果你的集群未启用 CNI NetworkPolicy 或需额外放通（例如外部调用 litellm），需要按需调整策略。

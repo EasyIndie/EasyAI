@@ -44,7 +44,7 @@
 详情请参考：
 - [docs/lite-mode-quickstart.md](docs/lite-mode-quickstart.md)（Lite 轻量模式：快速启动与排障指南）
 - [docs/user-manual.md](docs/user-manual.md)（产品使用手册 + 常用 API 速查）
-- [docs/deployment.md](docs/deployment.md)（部署：Combined / Standalone / K8S）
+- [docs/deployment.md](docs/deployment.md)（部署：Combined 组合模式 / Lite 轻量模式 / K8S）
 - [docs/operations.md](docs/operations.md)（运行手册：发布前检查 + 排障）
 - [docs/development.md](docs/development.md)（开发/测试/安全基线/文档校验）
 - [docs/architecture.md](docs/architecture.md)（架构与请求流）
