@@ -46,5 +46,6 @@
 - [docs/user-manual.md](docs/user-manual.md)（产品使用手册 + 常用 API 速查）
 - [docs/deployment.md](docs/deployment.md)（部署：Combined 组合模式 / Lite 轻量模式 / K8S）
 - [docs/operations.md](docs/operations.md)（运行手册：发布前检查 + 排障 + 一键清库）
+- [docs/local-model-benchmark.md](docs/local-model-benchmark.md)（本机模型实测报告：内存占用、耗时与模型对比）
 - [docs/development.md](docs/development.md)（开发/测试/安全基线/文档校验）
 - [docs/architecture.md](docs/architecture.md)（架构与请求流）
