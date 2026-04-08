@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "usage" | "keys" | "tenants";
+type Tab = "usage" | "keys" | "tenants" | "playground";
 
 type UsageRow = {
   principal: string;
@@ -36,6 +36,55 @@ function formatTime(s: string) {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
   return d.toISOString().replace("T", " ").slice(0, 19);
+}
+
+function extractAssistantText(payload: any): string {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        try {
+          return JSON.stringify(part);
+        } catch {
+          return String(part ?? "");
+        }
+      })
+      .join("\n");
+  }
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload ?? "");
+  }
+}
+
+function formatUsage(payload: any): string {
+  const usage = payload?.usage;
+  if (!usage || typeof usage !== "object") return "";
+  const prompt = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : "-";
+  const completion = typeof usage.completion_tokens === "number" ? usage.completion_tokens : "-";
+  const total = typeof usage.total_tokens === "number" ? usage.total_tokens : "-";
+  return `Prompt ${prompt} / Completion ${completion} / Total ${total}`;
+}
+
+function extractStreamChunkText(payload: any): string {
+  const delta = payload?.choices?.[0]?.delta;
+  if (typeof delta?.content === "string") return delta.content;
+  if (Array.isArray(delta?.content)) {
+    return delta.content
+      .map((part: any) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        return "";
+      })
+      .join("");
+  }
+  const message = payload?.choices?.[0]?.message;
+  if (typeof message?.content === "string") return message.content;
+  return "";
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -207,6 +256,7 @@ function TenantPicker(props: TenantPickerProps) {
 }
 
 export function App() {
+  const playgroundAbortRef = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<Tab>("usage");
   const [sinceMinutes, setSinceMinutes] = useState(60);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
@@ -219,10 +269,32 @@ export function App() {
   const [keyPage, setKeyPage] = useState<number>(1);
   const [status, setStatus] = useState<string>("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [playgroundModels, setPlaygroundModels] = useState<string[]>([]);
+  const [playgroundModel, setPlaygroundModel] = useState<string>("");
+  const [playgroundSystemPrompt, setPlaygroundSystemPrompt] = useState<string>("你是一个有帮助的 AI 助手。");
+  const [playgroundUserPrompt, setPlaygroundUserPrompt] = useState<string>("");
+  const [playgroundTemperature, setPlaygroundTemperature] = useState<string>("0");
+  const [playgroundMaxTokens, setPlaygroundMaxTokens] = useState<string>("512");
+  const [playgroundStream, setPlaygroundStream] = useState<boolean>(false);
+  const [playgroundLoading, setPlaygroundLoading] = useState<boolean>(false);
+  const [playgroundResult, setPlaygroundResult] = useState<string>("");
+  const [playgroundRaw, setPlaygroundRaw] = useState<string>("");
+  const [playgroundUsage, setPlaygroundUsage] = useState<string>("");
+  const [playgroundLatencyMs, setPlaygroundLatencyMs] = useState<number | null>(null);
+
+  function stopPlayground() {
+    const controller = playgroundAbortRef.current;
+    if (!controller) return;
+    controller.abort();
+    playgroundAbortRef.current = null;
+    setPlaygroundLoading(false);
+    setStatus("已停止");
+  }
 
   const title = useMemo(() => {
     if (tab === "usage") return "用量统计";
     if (tab === "keys") return "API 密钥";
+    if (tab === "playground") return "模型测试";
     return "租户管理";
   }, [tab]);
 
@@ -256,6 +328,157 @@ export function App() {
       setStatus("成功");
     } catch (e: any) {
       setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function loadPlaygroundModels() {
+    setStatus("加载中...");
+    try {
+      const data = await fetchJson("/admin/api/playground/models");
+      const models = Array.isArray(data?.data)
+        ? (data.data as any[])
+            .map((item) => String(item?.id ?? "").trim())
+            .filter(Boolean)
+        : [];
+      setPlaygroundModels(models);
+      setPlaygroundModel((current) => current || models[0] || "");
+      setStatus("成功");
+    } catch (e: any) {
+      setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function runPlayground() {
+    const model = playgroundModel.trim();
+    const userPrompt = playgroundUserPrompt.trim();
+    if (!model) {
+      setStatus("请先选择模型");
+      return;
+    }
+    if (!userPrompt) {
+      setStatus("请输入用户消息");
+      return;
+    }
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (playgroundSystemPrompt.trim()) {
+      messages.push({ role: "system", content: playgroundSystemPrompt.trim() });
+    }
+    messages.push({ role: "user", content: userPrompt });
+
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      stream: playgroundStream,
+    };
+    if (playgroundTemperature.trim()) body.temperature = Number(playgroundTemperature);
+    if (playgroundMaxTokens.trim()) body.max_tokens = Number(playgroundMaxTokens);
+
+    setPlaygroundLoading(true);
+    setPlaygroundResult("");
+    setPlaygroundRaw("");
+    setPlaygroundUsage("");
+    setPlaygroundLatencyMs(null);
+    setStatus("请求中...");
+
+    const startedAt = performance.now();
+    const controller = new AbortController();
+    playgroundAbortRef.current = controller;
+    try {
+      if (playgroundStream) {
+        const res = await fetch("/admin/api/playground/chat", {
+          method: "POST",
+          headers: {
+            accept: "text/event-stream",
+            "content-type": "application/json",
+            "x-oneapi-admin-action": "1",
+          },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || String(res.status));
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("stream not supported by browser");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let raw = "";
+        let output = "";
+        let usageText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          raw += chunk;
+          buffer += chunk;
+          setPlaygroundRaw(raw);
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const event of events) {
+            const lines = event
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("data: "));
+            for (const line of lines) {
+              const dataText = line.slice(6);
+              if (dataText === "[DONE]") continue;
+              let parsed: any;
+              try {
+                parsed = JSON.parse(dataText);
+              } catch {
+                continue;
+              }
+              if (parsed?.error?.message) {
+                throw new Error(String(parsed.error.message));
+              }
+              const text = extractStreamChunkText(parsed);
+              if (text) {
+                output += text;
+                setPlaygroundResult(output);
+              }
+              const nextUsage = formatUsage(parsed);
+              if (nextUsage) {
+                usageText = nextUsage;
+                setPlaygroundUsage(nextUsage);
+              }
+            }
+          }
+        }
+
+        const latency = Math.round(performance.now() - startedAt);
+        setPlaygroundLatencyMs(latency);
+        setPlaygroundUsage((current) => current || usageText);
+        setStatus("成功");
+      } else {
+        const data = await fetchJson("/admin/api/playground/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+        const latency = Math.round(performance.now() - startedAt);
+        setPlaygroundLatencyMs(latency);
+        setPlaygroundResult(extractAssistantText(data));
+        setPlaygroundRaw(JSON.stringify(data, null, 2));
+        setPlaygroundUsage(formatUsage(data));
+        setStatus("成功");
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        setStatus("已停止");
+      } else {
+        setStatus(e?.message ?? "失败");
+      }
+    } finally {
+      if (playgroundAbortRef.current === controller) {
+        playgroundAbortRef.current = null;
+      }
+      setPlaygroundLoading(false);
     }
   }
 
@@ -380,7 +603,17 @@ export function App() {
       loadTenants();
       loadKeys();
     }
+    if (tab === "playground") {
+      loadPlaygroundModels();
+    }
   }, [tab]);
+
+  useEffect(() => {
+    return () => {
+      playgroundAbortRef.current?.abort();
+      playgroundAbortRef.current = null;
+    };
+  }, []);
 
   const boundKeyCountByTenant = useMemo(() => {
     const m = new Map<string, number>();
@@ -440,6 +673,9 @@ export function App() {
         </button>
         <button onClick={() => setTab("tenants")} disabled={tab === "tenants"}>
           租户管理
+        </button>
+        <button onClick={() => setTab("playground")} disabled={tab === "playground"}>
+          模型测试
         </button>
         <span style={{ marginLeft: 8, color: "#666" }}>{status}</span>
       </div>
@@ -747,6 +983,119 @@ export function App() {
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {tab === "playground" ? (
+        <div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+            <label>
+              模型：
+              <select
+                value={playgroundModel}
+                onChange={(e) => setPlaygroundModel(e.currentTarget.value)}
+                style={{ marginLeft: 8, minWidth: 320 }}
+              >
+                <option value="">请选择模型</option>
+                {playgroundModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              温度：
+              <input
+                type="number"
+                step="0.1"
+                min={0}
+                max={2}
+                value={playgroundTemperature}
+                onChange={(e) => setPlaygroundTemperature(e.currentTarget.value)}
+                style={{ marginLeft: 8, width: 90 }}
+              />
+            </label>
+            <label>
+              最大 Tokens：
+              <input
+                type="number"
+                min={1}
+                value={playgroundMaxTokens}
+                onChange={(e) => setPlaygroundMaxTokens(e.currentTarget.value)}
+                style={{ marginLeft: 8, width: 110 }}
+              />
+            </label>
+            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={playgroundStream}
+                onChange={(e) => setPlaygroundStream(e.currentTarget.checked)}
+              />
+              流式输出
+            </label>
+            <button onClick={loadPlaygroundModels}>刷新模型</button>
+            <button onClick={runPlayground} disabled={playgroundLoading || !playgroundModel.trim()}>
+              {playgroundLoading ? "请求中..." : "发送请求"}
+            </button>
+            <button onClick={stopPlayground} disabled={!playgroundLoading}>
+              停止输出
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>系统提示词</span>
+              <textarea
+                value={playgroundSystemPrompt}
+                onChange={(e) => setPlaygroundSystemPrompt(e.currentTarget.value)}
+                rows={4}
+                style={{ width: "100%", fontFamily: "inherit" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>用户消息</span>
+              <textarea
+                value={playgroundUserPrompt}
+                onChange={(e) => setPlaygroundUserPrompt(e.currentTarget.value)}
+                rows={8}
+                placeholder="请输入要测试的问题或指令"
+                style={{ width: "100%", fontFamily: "inherit" }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 12, color: "#666", fontSize: 14, flexWrap: "wrap" }}>
+            <span>模型数量：{playgroundModels.length}</span>
+            <span>调用方式：{playgroundStream ? "流式" : "非流式"}</span>
+            {playgroundLatencyMs !== null ? <span>耗时：{playgroundLatencyMs} ms</span> : null}
+            {playgroundUsage ? <span>{playgroundUsage}</span> : null}
+          </div>
+
+          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+            <div>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>模型返回</div>
+              <textarea
+                readOnly
+                value={playgroundResult}
+                rows={10}
+                placeholder="请求返回内容会显示在这里"
+                style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+              />
+            </div>
+
+            <div>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>原始 JSON</div>
+              <textarea
+                readOnly
+                value={playgroundRaw}
+                rows={16}
+                placeholder="原始响应 JSON 会显示在这里"
+                style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
