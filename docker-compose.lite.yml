@@ -19,5 +19,23 @@ services:
     depends_on:
       - ollama
 
+  anythingllm:
+    image: mintplexlabs/anythingllm:latest
+    ports:
+      - "3000:3001"
+    environment:
+      STORAGE_DIR: /app/server/storage
+      JWT_SECRET: easyai-anythingllm-lite-secret
+      LLM_PROVIDER: generic-openai
+      GENERIC_OPEN_AI_BASE_PATH: http://litellm:4000/v1
+      GENERIC_OPEN_AI_API_KEY: lite-mode
+      GENERIC_OPEN_AI_MODEL_PREF: local/ollama:qwen2.5:0.5b
+      GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: 32768
+    volumes:
+      - anythingllm_storage:/app/server/storage
+    depends_on:
+      - litellm
+
 volumes:
   ollama_data:
+  anythingllm_storage:

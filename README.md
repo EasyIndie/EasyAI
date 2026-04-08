@@ -38,6 +38,9 @@
   - API 文档 (Swagger UI): `/docs`
   - OpenAPI 规范: `/openapi.json`
   - 管理后台: `/dashboard`
+- AnythingLLM: `http://localhost:3000`
+  - 默认通过 OpenAI 兼容接口连接 EasyAI
+  - 适合作为当前项目的可选图形化聊天界面
 
 ## 项目文档
 
