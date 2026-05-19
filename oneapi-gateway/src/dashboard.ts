@@ -79,6 +79,30 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     });
   }
 
+  const chatRoot = path.resolve(__dirname, "../chat-ui/dist");
+  if (fs.existsSync(chatRoot)) {
+    const chatAssetsRoot = path.join(chatRoot, "assets");
+    if (fs.existsSync(chatAssetsRoot)) {
+      await app.register(fastifyStatic, { root: chatAssetsRoot, prefix: "/chat/assets/", decorateReply: false });
+    }
+
+    app.get("/chat", async (_req, reply) => {
+      const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
+      reply.type("text/html; charset=utf-8");
+      return reply.send(html);
+    });
+
+    app.get("/chat/*", async (_req, reply) => {
+      const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
+      reply.type("text/html; charset=utf-8");
+      return reply.send(html);
+    });
+  } else {
+    app.get("/chat", async (_req, reply) => {
+      return reply.status(503).send("Chat UI not built");
+    });
+  }
+
   app.get("/admin/api/usage", async (req, reply) => {
     const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
     if (!ok) {

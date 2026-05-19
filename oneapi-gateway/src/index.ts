@@ -13,6 +13,7 @@ import { registerDashboard } from "./dashboard.ts";
 import { registerAdminApi } from "./admin.ts";
 import { registerBatchRoutes } from "./batch.ts";
 import { registerOpenApi } from "./openapi.ts";
+import { registerChatRoutes } from "./chat.ts";
 
 const cfg = loadConfig();
 
@@ -55,6 +56,8 @@ await registerProxyRoutes(app, {
 });
 
 await registerBatchRoutes(app, cfg, db, redis, async (headers) => authenticate(cfg, oauth, headers, db, redis));
+
+await registerChatRoutes(app, cfg, oauth, db, redis);
 
 await app.listen({ host: "0.0.0.0", port: cfg.port });
 
