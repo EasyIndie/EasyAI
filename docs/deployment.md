@@ -7,7 +7,7 @@
 
 ## 1. Combined 模式（完整版）
 
-此模式适合在生产环境中提供完整的 API 管理、鉴权、限流、审计以及异步任务（Batch）功能。
+此模式适合在生产环境中提供完整的 API 管理、鉴权、限流、审计、缓存以及异步任务（Batch）功能。
 
 ### 1.1 Docker Compose
 
@@ -20,11 +20,16 @@ docker compose up -d --build
 验证网关与代理层是否正常启动：
 
 ```bash
-curl -sS http://localhost:8080/healthz
+curl -sS http://localhost:3003/healthz
 curl -sS http://localhost:4000/healthz
 ```
 
-如需同时启用图形化聊天界面，可直接访问：
+管理后台：
+- Dashboard：`http://localhost:3003/dashboard`
+- 内置聊天界面：`http://localhost:3003/chat`
+- Swagger API 文档：`http://localhost:3003/docs`
+
+如需同时启用外部图形化聊天界面，可直接访问：
 
 ```text
 http://localhost:3000
@@ -33,7 +38,7 @@ http://localhost:3000
 AnythingLLM 已在 `docker-compose.yml` 中预配置为通过 OneAPI 的 OpenAI 兼容接口工作：
 
 - LLM Provider：`generic-openai`
-- Base URL：`http://oneapi:8080/v1`
+- Base URL：`http://oneapi:3003/v1`
 - API Key：`dev-key`
 - 默认模型：`local/ollama:qwen2.5:0.5b`
 - 如需切换其它模型，可在 AnythingLLM 设置页中调整默认模型或工作区模型配置
@@ -41,11 +46,11 @@ AnythingLLM 已在 `docker-compose.yml` 中预配置为通过 OneAPI 的 OpenAI 
 通过网关发起一次测试请求：
 
 ```bash
-curl -sS http://localhost:8080/v1/chat/completions \
+curl -sS http://localhost:3003/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer dev-key" \
   -d '{
-    "model":"local/ollama:qwen2.5:0.5b",
+    "model":"chat",
     "messages":[{"role":"user","content":"Say hello in one sentence."}],
     "temperature":0
   }'
@@ -122,9 +127,9 @@ kubectl apply -k k8s/combined
 ```
 
 **说明**：
-- `k8s/combined` 默认包含本地的 `ollama` 后端。
-- `k8s/combined` 默认启用了 NetworkPolicy 安全基线（默认拒绝入站，仅放通必要的服务间访问）。
-- 部署后，配置将通过 ConfigMap 自动从您项目中的 `oneapi.yaml` 和 `litellm.yaml` 加载。
+- `k8s/combined/base` 包含完整组件：oneapi、litellm、ollama、redis、postgres、batch-worker 及 NetworkPolicy 安全基线
+- NetworkPolicy 默认拒绝入站，仅放通必要的服务间访问
+- 部署后，配置将通过 ConfigMap 自动从项目中的 `oneapi.yaml` 和 `litellm.yaml` 加载
 
 ### 3.3 生产环境叠加层 (Overlays)
 

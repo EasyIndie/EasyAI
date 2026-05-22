@@ -13,10 +13,9 @@ function findRepoRoot(startDir: string): string {
   let dir = path.resolve(startDir);
   while (true) {
     const hasCompose = rawExists(path.join(dir, "docker-compose.yml"));
-    const hasSpecs = rawExists(path.join(dir, "specs"));
     const hasDocs = rawExists(path.join(dir, "docs"));
     const hasGateway = rawExists(path.join(dir, "oneapi-gateway"));
-    if (hasCompose && hasSpecs && hasDocs && hasGateway) return dir;
+    if (hasCompose && hasDocs && hasGateway) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return path.resolve(startDir);
     dir = parent;
@@ -74,7 +73,7 @@ function extractPathsFromText(s: string): string[] {
   return uniq(out.map((p) => (p.startsWith("/") ? p : `/${p}`)));
 }
 
-const docRoots = ["docs", "specs"];
+const docRoots = ["docs"];
 const docFiles: string[] = [];
 for (const r of docRoots) {
   const p = path.join(repoRoot, r);
@@ -147,10 +146,12 @@ const gatewayBlob = gatewayRouteFiles.filter(exists).map((p) => readText(p)).joi
 
 function canonicalizeDocPath(p: string): string {
   let out = p;
+  out = out.replace(/^\/admin\/api\/tenants\/[^/]+\/unbind_keys$/i, "/admin/api/tenants/:tenantId/unbind_keys");
   out = out.replace(/^\/admin\/api\/tenants\/[^/]+$/i, "/admin/api/tenants/:tenantId");
   out = out.replace(/^\/admin\/api\/keys\/[^/]+\/rpm$/i, "/admin/api/keys/:id/rpm");
   out = out.replace(/^\/admin\/api\/keys\/[^/]+\/tenant$/i, "/admin/api/keys/:id/tenant");
   out = out.replace(/^\/admin\/api\/keys\/[^/]+\/revoke$/i, "/admin/api/keys/:id/revoke");
+  out = out.replace(/^\/admin\/api\/keys\/[^/]+$/i, "/admin/api/keys/:id");
   out = out.replace(/^\/v1\/batches\/[^/]+$/i, "/v1/batches/:batchId");
   out = out.replace(/^\/v1\/batches\/[^/]+\/output$/i, "/v1/batches/:batchId/output");
   return out;
