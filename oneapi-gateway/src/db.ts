@@ -60,20 +60,12 @@ async function migrate(pool: pg.Pool): Promise<void> {
       end if;
     end $$;
   `);
-  await pool.query(`
-    update usage_events ue
-    set
-      api_key_id = ak.id,
-      tenant_id = coalesce(ue.tenant_id, ak.tenant_id)
-    from api_keys ak
-    where ue.api_key_id is null
-      and ue.api_key_hash = ak.key_hash
-  `);
   await pool.query(`create index if not exists usage_events_ts_idx on usage_events(ts desc);`);
   await pool.query(`create index if not exists usage_events_principal_ts_idx on usage_events(principal, ts desc);`);
   await pool.query(`create index if not exists usage_events_api_key_id_ts_idx on usage_events(api_key_id, ts desc);`);
   await pool.query(`create index if not exists usage_events_tenant_id_ts_idx on usage_events(tenant_id, ts desc);`);
 
+  // api_keys must be created before the backfill UPDATE that references it
   await pool.query(`
     create table if not exists api_keys (
       id bigserial primary key,
@@ -95,6 +87,16 @@ async function migrate(pool: pg.Pool): Promise<void> {
   `);
   await pool.query(`create index if not exists api_keys_revoked_idx on api_keys(revoked_at);`);
   await pool.query(`create index if not exists api_keys_tenant_idx on api_keys(tenant_id);`);
+
+  await pool.query(`
+    update usage_events ue
+    set
+      api_key_id = ak.id,
+      tenant_id = coalesce(ue.tenant_id, ak.tenant_id)
+    from api_keys ak
+    where ue.api_key_id is null
+      and ue.api_key_hash = ak.key_hash
+  `);
 
   await pool.query(`
     create table if not exists tenants (

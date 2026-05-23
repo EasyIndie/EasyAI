@@ -1,5 +1,5 @@
-import type { RedisClient } from "./redis.ts";
-import { sha256Hex } from "./crypto.ts";
+import type { RedisClient } from "./redis.js";
+import { sha256Hex } from "./crypto.js";
 
 export type CacheDecision = { shouldCache: false } | { shouldCache: true; cacheKey: string };
 

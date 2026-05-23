@@ -34,6 +34,20 @@ curl -sS http://localhost:3003/healthz
 curl -sS http://localhost:3003/metrics | head
 ```
 
+### 1.3 一键 Smoke（推荐）
+
+仓库提供了整链路 smoke 脚本（health/docs/auth/chat/dashboard/batch）：
+
+```bash
+./scripts/smoke-compose.sh
+```
+
+可通过环境变量覆盖默认连接参数：
+
+```bash
+BASE_URL=http://localhost:3003 API_KEY=dev-key ADMIN_USER=admin ADMIN_PASS=admin ./scripts/smoke-compose.sh
+```
+
 ### 1.3 标准验收 SOP（推荐）
 
 目标：把一次失败快速定位到 OneAPI / LiteLLM / Ollama 的哪一层，并覆盖常用形态（非流式/流式、别名模型）。

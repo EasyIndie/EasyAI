@@ -34,7 +34,7 @@ function loadConfig() {
   
   const bw = parsed.batch_worker || {};
   const pollSleepMs = Number(bw.poll_sleep_ms ?? 200);
-  const oneapiBaseUrl = bw.oneapi_base_url ?? "http://localhost:8080";
+  const oneapiBaseUrl = bw.oneapi_base_url ?? "http://localhost:3003";
   
   return { redisUrl, databaseUrl, internalToken, pollSleepMs, oneapiBaseUrl };
 }

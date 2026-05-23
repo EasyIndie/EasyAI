@@ -16,74 +16,27 @@ spec:
         - name: oneapi
           image: easyai/oneapi-gateway:latest
           ports:
-            - containerPort: 8080
+            - containerPort: 3003
           env:
-            - name: APP_ENV
-              value: development
-            - name: ONEAPI_PORT
-              value: "8080"
-            - name: ONEAPI_LOG_LEVEL
-              value: info
-            - name: ONEAPI_AUTH_MODE
-              value: apikey,oauth
-            - name: ONEAPI_UPSTREAMS
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: ONEAPI_UPSTREAMS
-            - name: ONEAPI_UPSTREAM_TIMEOUT_MS
-              value: "20000"
-            - name: ONEAPI_RATE_LIMIT_RPM
-              value: "120"
-            - name: ONEAPI_CACHE_ENABLED
-              value: "1"
-            - name: ONEAPI_CACHE_TTL_SECONDS
-              value: "60"
-            - name: ONEAPI_CACHE_REPLAY_MODE
-              value: fixed
-            - name: ONEAPI_CACHE_REPLAY_CHUNK_DELAY_MS
-              value: "0"
-            - name: ONEAPI_CACHE_REPLAY_MAX_TOTAL_MS
-              value: "0"
-            - name: ONEAPI_MODEL_MAP
-              value: '{"chat":"local/ollama:qwen2.5:0.5b","coder":"local/ollama:qwen2.5-coder:1.5b","gemma4":"local/ollama:gemma4:e4b","gemma4_2b":"local/ollama:gemma4:e2b"}'
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: REDIS_URL
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: DATABASE_URL
-            - name: ONEAPI_ADMIN_USER
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: ONEAPI_ADMIN_USER
-            - name: ONEAPI_ADMIN_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: ONEAPI_ADMIN_PASS
-            - name: ONEAPI_API_KEYS
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: ONEAPI_API_KEYS
+            - name: ONEAPI_CONFIG_PATH
+              value: /app/config/oneapi.yaml
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: 3003
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: 3003
             initialDelaySeconds: 10
             periodSeconds: 10
+          volumeMounts:
+            - name: oneapi-config
+              mountPath: /app/config/oneapi.yaml
+              subPath: oneapi.yaml
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -91,6 +44,10 @@ spec:
             limits:
               cpu: "2"
               memory: 1Gi
+      volumes:
+        - name: oneapi-config
+          configMap:
+            name: oneapi-config
 ---
 apiVersion: v1
 kind: Service
@@ -101,5 +58,5 @@ spec:
     app: oneapi
   ports:
     - name: http
-      port: 8080
-      targetPort: 8080
+      port: 3003
+      targetPort: 3003

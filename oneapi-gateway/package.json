@@ -11,6 +11,7 @@
     "doc-audit": "ts-node --esm ../tools/doc-audit/check-docs.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",

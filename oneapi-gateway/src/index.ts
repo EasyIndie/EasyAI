@@ -2,18 +2,20 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import Fastify from "fastify";
-import { loadConfig } from "./config.ts";
-import { createRedis } from "./redis.ts";
-import { createDb } from "./db.ts";
-import { registry } from "./metrics.ts";
-import { createOAuthVerifier, authenticate } from "./auth.ts";
-import { UpstreamPool } from "./upstreams.ts";
-import { registerProxyRoutes } from "./proxy.ts";
-import { registerDashboard } from "./dashboard.ts";
-import { registerAdminApi } from "./admin.ts";
-import { registerBatchRoutes } from "./batch.ts";
-import { registerOpenApi } from "./openapi.ts";
-import { registerChatRoutes } from "./chat.ts";
+import cors from "@fastify/cors";
+import fs from "node:fs";
+import { loadConfig } from "./config.js";
+import { createRedis } from "./redis.js";
+import { createDb } from "./db.js";
+import { registry } from "./metrics.js";
+import { createOAuthVerifier, authenticate } from "./auth.js";
+import { UpstreamPool } from "./upstreams.js";
+import { registerProxyRoutes } from "./proxy.js";
+import { registerDashboard } from "./dashboard.js";
+import { registerAdminApi } from "./admin.js";
+import { registerBatchRoutes } from "./batch.js";
+import { registerOpenApi } from "./openapi.js";
+import { registerChatRoutes } from "./chat.js";
 
 const cfg = loadConfig();
 
@@ -21,12 +23,20 @@ const app = Fastify({
   logger: { level: cfg.logLevel },
   bodyLimit: 10 * 1024 * 1024,
   trustProxy: cfg.trustProxy,
+  ...(cfg.tls ? {
+    https: {
+      cert: fs.readFileSync(cfg.tls.certPath),
+      key: fs.readFileSync(cfg.tls.keyPath),
+    },
+  } : {}),
 });
 
 const redis = await createRedis(cfg.redisUrl);
 const db = await createDb(cfg.databaseUrl);
 const oauth = createOAuthVerifier(cfg);
 const pool = new UpstreamPool(cfg.upstreams);
+
+await app.register(cors, { origin: cfg.corsOrigin });
 
 app.get("/healthz", async () => {
   return {

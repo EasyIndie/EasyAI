@@ -19,24 +19,13 @@ spec:
         - name: batch-worker
           image: easyai/batch-worker:latest
           env:
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: REDIS_URL
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: DATABASE_URL
-            - name: ONEAPI_BASE_URL
-              value: http://oneapi:8080
-            - name: ONEAPI_INTERNAL_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: oneapi-secrets
-                  key: ONEAPI_INTERNAL_TOKEN
+            - name: ONEAPI_CONFIG_PATH
+              value: /app/config/oneapi.yaml
           volumeMounts:
+            - name: oneapi-config
+              mountPath: /app/config/oneapi.yaml
+              subPath: oneapi.yaml
+              readOnly: true
             - name: tmp
               mountPath: /tmp
           securityContext:
@@ -56,5 +45,8 @@ spec:
               cpu: "2"
               memory: 1Gi
       volumes:
+        - name: oneapi-config
+          configMap:
+            name: oneapi-config
         - name: tmp
           emptyDir: {}

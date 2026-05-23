@@ -1,6 +1,7 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
@@ -9,6 +10,7 @@ services:
   litellm:
     build:
       context: ./litellm-service
+    restart: unless-stopped
     environment:
       LITELLM_CONFIG_PATH: /app/config/litellm.yaml
       OLLAMA_HOST: http://ollama:11434
@@ -21,6 +23,7 @@ services:
 
   anythingllm:
     image: mintplexlabs/anythingllm:latest
+    restart: unless-stopped
     ports:
       - "3000:3001"
     environment:

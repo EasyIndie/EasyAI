@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  gateway-tests:
-    name: oneapi-gateway tests
+  full-gate:
+    name: full gate (scripts/test-all.sh)
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --no-deprecation
@@ -18,66 +18,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: oneapi-gateway/package-lock.json
-      - name: Install
-        run: npm ci --no-fund --no-audit
-        working-directory: oneapi-gateway
-      - name: Build
-        run: npm run build
-        working-directory: oneapi-gateway
-      - name: Test
-        run: npm test
-        working-directory: oneapi-gateway
-      - name: Doc audit
-        run: npm run doc-audit
-        working-directory: oneapi-gateway
-
-  admin-ui-build:
-    name: admin-ui build
-    runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --no-deprecation
-      NPM_CONFIG_FUND: "false"
-      NPM_CONFIG_AUDIT: "false"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: oneapi-gateway/admin-ui/package-lock.json
-      - name: Install
-        run: npm ci --no-fund --no-audit
-        working-directory: oneapi-gateway/admin-ui
-      - name: Build
-        run: npm run build
-        working-directory: oneapi-gateway/admin-ui
-
-  litellm-service-tests:
-    name: litellm-service tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Unit tests
-        run: python -m unittest discover -s litellm-service/test -p 'test_*.py'
-
-  kustomize-validate:
-    name: kustomize validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: azure/setup-kubectl@v4
         with:
           version: "v1.30.0"
-      - name: Render kustomize (combined)
-        run: kubectl kustomize k8s/combined >/dev/null
-      - name: Render kustomize (combined production overlay)
-        run: kubectl kustomize k8s/combined/overlays/production >/dev/null
-      - name: Render kustomize (litellm)
-        run: kubectl kustomize k8s/litellm >/dev/null
-      - name: Render kustomize (oneapi)
-        run: kubectl kustomize k8s/oneapi >/dev/null
+      - name: Run full gate
+        run: bash scripts/test-all.sh

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authenticate } from "../src/auth.ts";
-import type { Config } from "../src/config.ts";
+import { authenticate } from "../src/auth.js";
+import type { Config } from "../src/config.js";
 
 const baseCfg: Config = {
   appEnv: "test",
@@ -22,6 +22,7 @@ const baseCfg: Config = {
   cacheReplayMaxTotalMs: 0,
   cacheReplayMode: "fixed",
   guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+  corsOrigin: "*", tls: undefined,
   internalToken: undefined,
   redisUrl: "redis://x",
   databaseUrl: "postgres://x",

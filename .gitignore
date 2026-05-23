@@ -37,6 +37,7 @@ venv/
 # IDE
 .vscode/
 .idea/
+.claude/worktrees/
 
 # Reports / artifacts
 zap-report.html

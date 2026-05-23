@@ -2,42 +2,22 @@ app_env: "development"
 port: 3003
 log_level: "info"
 
-# Gateway settings
 trust_proxy: false
 
-# Admin credentials
 admin_user: "admin"
 admin_pass: "admin"
 
-# Authentication
 auth_modes:
   - "apikey"
-  - "oauth"
 api_keys:
   - "dev-key"
-oauth:
-  jwks_url: ""
-  audience: ""
-  issuer: ""
 
-# Internal token for batch worker communication
-internal_token: "dev-internal"
-internal_token_allow_cidrs:
-  - "127.0.0.1/32"
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "100.64.0.0/10"
-
-# Upstream services (e.g. LiteLLM)
 upstreams:
-  - "http://litellm:4000"
+  - "REPLACE_ME_UPSTREAM"
 upstream_timeout_ms: 60000
 
-# Rate limiting
 rate_limit_rpm: 120
 
-# Caching
 cache:
   enabled: true
   ttl_seconds: 60
@@ -45,20 +25,9 @@ cache:
   replay_max_total_ms: 0
   replay_mode: "fixed"
 
-# CORS (for browser-based clients)
 cors:
-  origin:
-    - "http://localhost:3000"
-    - "http://localhost:3003"
-    - "http://127.0.0.1:3000"
-    - "http://127.0.0.1:3003"
+  origin: "*"
 
-# TLS (optional — set cert_path and key_path to enable HTTPS)
-tls:
-  cert_path: ""
-  key_path: ""
-
-# Guardrails
 guardrails:
   enabled: true
   block_internal_ip: true
@@ -69,11 +38,9 @@ guardrails:
     - "jailbreak"
   pii_mask_enabled: true
 
-# Connections
 redis_url: "redis://redis:6379"
 database_url: "postgres://oneapi:oneapi@postgres:5432/oneapi"
 
-# Model Routing & Aliases
 model_map:
   "chat": "local/ollama:qwen2.5:0.5b"
   "coder": "local/ollama:qwen2.5-coder:1.5b"
@@ -81,8 +48,3 @@ model_map:
   "gemma4_2b": "local/ollama:gemma4:e2b"
 
 fallback_map: {}
-
-# Batch Worker Settings
-batch_worker:
-  poll_sleep_ms: 200
-  oneapi_base_url: "http://oneapi:3003"

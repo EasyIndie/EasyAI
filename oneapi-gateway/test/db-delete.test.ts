@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deleteApiKey, deleteTenant, unbindTenantKeys } from "../src/db.ts";
+import { deleteApiKey, deleteTenant, unbindTenantKeys } from "../src/db.js";
 
 function makeDb(script: { sqlIncludes: string; result: any }[]) {
   const calls: string[] = [];

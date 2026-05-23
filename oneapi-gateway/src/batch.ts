@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import type { Config } from "./config.ts";
-import type { Db } from "./db.ts";
-import { createBatch, getBatch, insertBatchItem, listBatchItems } from "./db.ts";
-import type { RedisClient } from "./redis.ts";
-import type { AuthContext } from "./auth.ts";
+import type { Config } from "./config.js";
+import type { Db } from "./db.js";
+import { createBatch, getBatch, insertBatchItem, listBatchItems } from "./db.js";
+import type { RedisClient } from "./redis.js";
+import type { AuthContext } from "./auth.js";
 
 type BatchRequestItem = {
   endpoint?: string;

@@ -1,4 +1,4 @@
-import type { RedisClient } from "./redis.ts";
+import type { RedisClient } from "./redis.js";
 
 export type RateLimitResult =
   | { ok: true; limit: number; remaining: number; resetSeconds: number }

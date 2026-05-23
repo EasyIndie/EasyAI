@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
-import { sha256Hex } from "./crypto.ts";
-import type { Config } from "./config.ts";
-import type { Db } from "./db.ts";
+import { sha256Hex } from "./crypto.js";
+import type { Config } from "./config.js";
+import type { Db } from "./db.js";
 import {
   findTenant,
   deleteApiKey,
@@ -15,8 +15,8 @@ import {
   updateApiKeyRpm,
   updateApiKeyTenant,
   upsertTenant,
-} from "./db.ts";
-import type { RedisClient } from "./redis.ts";
+} from "./db.js";
+import type { RedisClient } from "./redis.js";
 
 function basicAuthOk(authHeader: string | undefined, user: string, pass: string): boolean {
   if (!authHeader) return false;
@@ -57,7 +57,7 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.get("/admin/api/keys", async (req, reply) => {
     if (!requireAdmin(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const keys = await listApiKeys(db);
     return {
@@ -75,7 +75,7 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.post("/admin/api/keys", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const raw = generateApiKey();
     const hash = sha256Hex(raw);
@@ -87,10 +87,10 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.post("/admin/api/keys/:id/revoke", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const id = Number((req.params as any).id);
-    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: "invalid id" });
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     await revokeApiKey(db, id);
     return { ok: true };
   });
@@ -98,28 +98,28 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.delete("/admin/api/keys/:id", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const id = Number((req.params as any).id);
-    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: "invalid id" });
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const force = Boolean(body.force);
     const r = await deleteApiKey(db, id, force);
     if (r === "deleted") return { ok: true };
-    if (r === "not_found") return reply.status(404).send({ error: "not found" });
-    return reply.status(409).send({ error: "key must be revoked before delete" });
+    if (r === "not_found") return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
+    return reply.status(409).send({ error: { message: "key must be revoked before delete", type: "invalid_request_error" } });
   });
 
   app.put("/admin/api/keys/:id/rpm", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const id = Number((req.params as any).id);
-    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: "invalid id" });
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const rpm = body.rpm_limit === null || body.rpm_limit === undefined ? null : Number(body.rpm_limit);
-    if (rpm !== null && (!Number.isFinite(rpm) || rpm <= 0)) return reply.status(400).send({ error: "invalid rpm_limit" });
+    if (rpm !== null && (!Number.isFinite(rpm) || rpm <= 0)) return reply.status(400).send({ error: { message: "invalid rpm_limit", type: "invalid_request_error" } });
     await updateApiKeyRpm(db, id, rpm);
     return { ok: true };
   });
@@ -127,16 +127,16 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.put("/admin/api/keys/:id/tenant", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const id = Number((req.params as any).id);
-    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: "invalid id" });
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const tenantIdRaw = body.tenant_id === null || body.tenant_id === undefined ? null : String(body.tenant_id).trim();
     const tenantId = tenantIdRaw ? tenantIdRaw : null;
     if (tenantId) {
       const t = await findTenant(db, tenantId);
-      if (!t) return reply.status(400).send({ error: "tenant not found" });
+      if (!t) return reply.status(400).send({ error: { message: "tenant not found", type: "not_found" } });
     }
     await updateApiKeyTenant(db, id, tenantId);
     return { ok: true };
@@ -145,7 +145,7 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.get("/admin/api/tenants", async (req, reply) => {
     if (!requireAdmin(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const tenants = await listTenants(db);
     return { tenants };
@@ -154,16 +154,16 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.put("/admin/api/tenants/:tenantId", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const tenantId = String((req.params as any).tenantId ?? "").trim();
-    if (!tenantId) return reply.status(400).send({ error: "invalid tenantId" });
+    if (!tenantId) return reply.status(400).send({ error: { message: "invalid tenantId", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const rpm = body.rpm_limit === null || body.rpm_limit === undefined ? null : Number(body.rpm_limit);
     const tpm = body.tpm_limit === null || body.tpm_limit === undefined ? null : Number(body.tpm_limit);
     const disabled = Boolean(body.disabled);
-    if (rpm !== null && (!Number.isFinite(rpm) || rpm <= 0)) return reply.status(400).send({ error: "invalid rpm_limit" });
-    if (tpm !== null && (!Number.isFinite(tpm) || tpm <= 0)) return reply.status(400).send({ error: "invalid tpm_limit" });
+    if (rpm !== null && (!Number.isFinite(rpm) || rpm <= 0)) return reply.status(400).send({ error: { message: "invalid rpm_limit", type: "invalid_request_error" } });
+    if (tpm !== null && (!Number.isFinite(tpm) || tpm <= 0)) return reply.status(400).send({ error: { message: "invalid tpm_limit", type: "invalid_request_error" } });
     await upsertTenant(db, tenantId, rpm, tpm, disabled);
     await redis.set(
       `tenantcfg:v1:${tenantId}`,
@@ -176,10 +176,10 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
   app.delete("/admin/api/tenants/:tenantId", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const tenantId = String((req.params as any).tenantId ?? "").trim();
-    if (!tenantId) return reply.status(400).send({ error: "invalid tenantId" });
+    if (!tenantId) return reply.status(400).send({ error: { message: "invalid tenantId", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const force = Boolean(body.force);
     const r = await deleteTenant(db, tenantId, force);
@@ -187,19 +187,19 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
       await redis.del(`tenantcfg:v1:${tenantId}`);
       return { ok: true };
     }
-    if (r === "not_found") return reply.status(404).send({ error: "not found" });
-    return reply.status(409).send({ error: "tenant still has keys bound" });
+    if (r === "not_found") return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
+    return reply.status(409).send({ error: { message: "tenant still has keys bound", type: "invalid_request_error" } });
   });
 
   app.post("/admin/api/tenants/:tenantId/unbind_keys", async (req, reply) => {
     if (!requireAdminWrite(req, cfg)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const tenantId = String((req.params as any).tenantId ?? "").trim();
-    if (!tenantId) return reply.status(400).send({ error: "invalid tenantId" });
+    if (!tenantId) return reply.status(400).send({ error: { message: "invalid tenantId", type: "invalid_request_error" } });
     const t = await findTenant(db, tenantId);
-    if (!t) return reply.status(404).send({ error: "not found" });
+    if (!t) return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
     const n = await unbindTenantKeys(db, tenantId);
     await redis.del(`tenantcfg:v1:${tenantId}`);
     return { ok: true, unbound: n };

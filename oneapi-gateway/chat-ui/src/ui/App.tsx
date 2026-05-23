@@ -107,6 +107,8 @@ export function App() {
   const [temperature, setTemperature] = useState("0.7");
   const [maxTokens, setMaxTokens] = useState("2048");
   const [convLoading, setConvLoading] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -127,12 +129,7 @@ export function App() {
 
   const loadModels = useCallback(async () => {
     try {
-      const data = await fetchJson("/chat-api/conversations");
-      // Use the chat API's model list - we default to whatever is available
-      // Models come from a separate endpoint
-    } catch {}
-    try {
-      const data = await fetchJson("/admin/api/playground/models");
+      const data = await fetchJson("/chat-api/models");
       const list = Array.isArray(data?.data)
         ? (data.data as any[]).map((m) => String(m?.id ?? "").trim()).filter(Boolean)
         : [];
@@ -510,15 +507,60 @@ export function App() {
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 14,
-                    fontWeight: conv.id === currentId ? 600 : 400,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}>
-                    {conv.title || "新对话"}
-                  </div>
+                  {renamingId === conv.id ? (
+                    <input
+                      value={renameInput}
+                      onChange={(e) => setRenameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.stopPropagation();
+                          const trimmed = renameInput.trim();
+                          if (trimmed) handleUpdateTitle(conv.id, trimmed);
+                          setRenamingId(null);
+                        }
+                        if (e.key === "Escape") {
+                          e.stopPropagation();
+                          setRenamingId(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        const trimmed = renameInput.trim();
+                        if (trimmed) handleUpdateTitle(conv.id, trimmed);
+                        setRenamingId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                      style={{
+                        width: "100%",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        border: "1px solid #1a73e8",
+                        fontSize: 14,
+                        fontFamily: "inherit",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      onClick={() => {
+                        if (isStreaming) return;
+                        setRenamingId(conv.id);
+                        setRenameInput(conv.title || "");
+                      }}
+                      style={{
+                        fontSize: 14,
+                        fontWeight: conv.id === currentId ? 600 : 400,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        cursor: isStreaming ? "default" : "text",
+                      }}
+                      title="点击重命名"
+                    >
+                      {conv.title || "新对话"}
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
                     {conv.message_count} 条消息 · {formatTime(conv.updated_at)}
                   </div>

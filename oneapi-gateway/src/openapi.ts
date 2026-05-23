@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Config } from "./config.ts";
+import type { Config } from "./config.js";
 
 function buildSpec(cfg: Config) {
   const securitySchemes = {

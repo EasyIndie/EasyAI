@@ -6,24 +6,38 @@ export NODE_OPTIONS="${NODE_OPTIONS---no-deprecation}"
 export NPM_CONFIG_FUND="${NPM_CONFIG_FUND-false}"
 export NPM_CONFIG_AUDIT="${NPM_CONFIG_AUDIT-false}"
 
-echo "[1/4] oneapi-gateway: tests + doc-audit"
+echo "[1/6] oneapi-gateway: tests + doc-audit"
 cd "$root/oneapi-gateway"
 npm ci --no-fund --no-audit
 npm run build
 npm test
 npm run doc-audit
 
-echo "[2/4] admin-ui: build"
+echo "[2/6] admin-ui: build"
 cd "$root/oneapi-gateway/admin-ui"
 npm ci --no-fund --no-audit
 npm run build
 
-echo "[3/4] litellm-service: unit tests"
+echo "[3/6] batch-worker: build"
+cd "$root/batch-worker"
+npm ci --no-fund --no-audit
+npm run build
+
+echo "[4/6] litellm-service: unit tests"
 cd "$root"
 python3 -m unittest discover -s litellm-service/test -p 'test_*.py'
 
-echo "[4/4] kustomize: render validate"
+echo "[5/6] kustomize: render validate"
 kubectl kustomize "$root/k8s/combined" >/dev/null
 kubectl kustomize "$root/k8s/litellm" >/dev/null
+
+echo "[6/6] compose smoke: hard gate"
+cleanup() {
+  docker compose -f "$root/docker-compose.yml" down -v >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+docker compose -f "$root/docker-compose.yml" up -d --build redis postgres ollama litellm oneapi batch_worker
+"$root/scripts/smoke-compose.sh"
 
 echo "OK"

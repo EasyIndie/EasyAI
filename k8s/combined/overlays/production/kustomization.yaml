@@ -8,34 +8,18 @@ secretGenerator:
   - name: oneapi-secrets
     behavior: replace
     literals:
-      - ONEAPI_ADMIN_USER=REPLACE_ME
-      - ONEAPI_ADMIN_PASS=REPLACE_ME
-      - ONEAPI_API_KEYS=REPLACE_ME
-      - ONEAPI_INTERNAL_TOKEN=REPLACE_ME
       - REDIS_URL=REPLACE_ME
       - POSTGRES_USER=REPLACE_ME
       - POSTGRES_PASSWORD=REPLACE_ME
       - POSTGRES_DB=REPLACE_ME
       - DATABASE_URL=REPLACE_ME
+configMapGenerator:
+  - name: oneapi-config
+    behavior: replace
+    files:
+      - oneapi.yaml=oneapi-config.yaml
 
 patches:
-  - target:
-      kind: Deployment
-      name: oneapi
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: production
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: ONEAPI_TRUST_PROXY
-          value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: ONEAPI_TRUST_PROXY_HOPS
-          value: "1"
   - target:
       kind: NetworkPolicy
       name: allow-ingress-oneapi

@@ -10,15 +10,15 @@ resources:
 secretGenerator:
   - name: oneapi-secrets
     literals:
-      - ONEAPI_ADMIN_USER=admin
-      - ONEAPI_ADMIN_PASS=admin
-      - ONEAPI_API_KEYS=dev-key
-      - ONEAPI_UPSTREAMS=REPLACE_ME
       - POSTGRES_USER=oneapi
       - POSTGRES_PASSWORD=oneapi
       - POSTGRES_DB=oneapi
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgres://oneapi:oneapi@postgres:5432/oneapi
+configMapGenerator:
+  - name: oneapi-config
+    files:
+      - oneapi.yaml=oneapi-config.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

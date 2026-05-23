@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerProxyRoutes } from "../src/proxy.ts";
-import type { Config } from "../src/config.ts";
-import { UpstreamPool } from "../src/upstreams.ts";
-import { authenticate } from "../src/auth.ts";
+import { registerProxyRoutes } from "../src/proxy.js";
+import type { Config } from "../src/config.js";
+import { UpstreamPool } from "../src/upstreams.js";
+import { authenticate } from "../src/auth.js";
 
 class FakeRedis {
   private readonly kv = new Map<string, string>();
@@ -76,6 +76,7 @@ test("proxy: forwards to upstream and caches", async () => {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: undefined,
     redisUrl: "redis://fake",
     databaseUrl: "postgres://fake",
@@ -157,6 +158,7 @@ test("proxy: falls back to secondary model on upstream failure", async () => {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: undefined,
     redisUrl: "redis://fake",
     databaseUrl: "postgres://fake",
@@ -226,6 +228,7 @@ test("proxy: forwards streaming requests and caches", async () => {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: undefined,
     redisUrl: "redis://fake",
     databaseUrl: "postgres://fake",

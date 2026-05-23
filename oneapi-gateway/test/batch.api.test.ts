@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerBatchRoutes } from "../src/batch.ts";
-import type { Config } from "../src/config.ts";
+import { registerBatchRoutes } from "../src/batch.js";
+import type { Config } from "../src/config.js";
 
 type Batch = {
   batch_id: string;
@@ -98,6 +98,7 @@ const baseCfg: Config = {
   cacheReplayMaxTotalMs: 0,
   cacheReplayMode: "fixed",
   guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+  corsOrigin: "*", tls: undefined,
   internalToken: "dev-internal",
   redisUrl: "redis://x",
   databaseUrl: "postgres://x",

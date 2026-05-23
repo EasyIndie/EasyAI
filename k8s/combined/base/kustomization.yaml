@@ -15,6 +15,9 @@ resources:
   - networkpolicy-egress.yaml
 
 configMapGenerator:
+  - name: oneapi-config
+    files:
+      - oneapi.yaml=oneapi-config.yaml
   - name: litellm-config
     files:
       - litellm.yaml=litellm-config.yaml
@@ -22,10 +25,6 @@ configMapGenerator:
 secretGenerator:
   - name: oneapi-secrets
     literals:
-      - ONEAPI_ADMIN_USER=admin
-      - ONEAPI_ADMIN_PASS=admin
-      - ONEAPI_API_KEYS=dev-key
-      - ONEAPI_INTERNAL_TOKEN=dev-internal
       - REDIS_URL=redis://redis:6379
       - POSTGRES_USER=oneapi
       - POSTGRES_PASSWORD=oneapi

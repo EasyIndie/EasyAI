@@ -4,9 +4,9 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
-import type { Config } from "./config.ts";
-import type { Db } from "./db.ts";
-import { getUsageSummary } from "./db.ts";
+import type { Config } from "./config.js";
+import type { Db } from "./db.js";
+import { getUsageSummary } from "./db.js";
 
 function basicAuthOk(authHeader: string | undefined, user: string, pass: string): boolean {
   if (!authHeader) return false;
@@ -48,8 +48,8 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
     if (ok) return;
     reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-    if (p.startsWith("/admin/api/")) return reply.status(401).send({ error: "unauthorized" });
-    return reply.status(401).send("Unauthorized");
+    if (p.startsWith("/admin/api/")) return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
   });
 
   const __filename = fileURLToPath(import.meta.url);
@@ -107,7 +107,7 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
     if (!ok) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
 
     const sinceMinutes = Math.max(1, Math.min(24 * 60, Number((req.query as any)?.sinceMinutes ?? "60")));
@@ -119,10 +119,10 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
     if (!ok) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const authHeaders = buildPlaygroundAuthHeaders(cfg);
-    if (!authHeaders) return reply.status(503).send({ error: "no playground auth configured" });
+    if (!authHeaders) return reply.status(503).send({ error: { message: "no playground auth configured", type: "gateway_error" } });
 
     const upstream = await app.inject({
       method: "GET",
@@ -146,16 +146,16 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
     if (!ok || !requireAdminAction(req)) {
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const authHeaders = buildPlaygroundAuthHeaders(cfg);
-    if (!authHeaders) return reply.status(503).send({ error: "no playground auth configured" });
+    if (!authHeaders) return reply.status(503).send({ error: { message: "no playground auth configured", type: "gateway_error" } });
 
     const body = (req.body ?? {}) as any;
-    if (!body || typeof body !== "object") return reply.status(400).send({ error: "invalid body" });
-    if (typeof body.model !== "string" || !body.model.trim()) return reply.status(400).send({ error: "model is required" });
+    if (!body || typeof body !== "object") return reply.status(400).send({ error: { message: "invalid body", type: "invalid_request_error" } });
+    if (typeof body.model !== "string" || !body.model.trim()) return reply.status(400).send({ error: { message: "model is required", type: "invalid_request_error" } });
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
-      return reply.status(400).send({ error: "messages is required" });
+      return reply.status(400).send({ error: { message: "messages is required", type: "invalid_request_error" } });
     }
 
     const payload = {

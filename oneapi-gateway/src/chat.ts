@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
-import type { Config } from "./config.ts";
-import type { Db, ConversationRow } from "./db.ts";
-import { createConversation, listConversations, getConversation, updateConversationTitle, touchConversation, deleteConversation, insertMessage, listMessages } from "./db.ts";
-import type { RedisClient } from "./redis.ts";
-import type { AuthContext, OAuthVerifier } from "./auth.ts";
-import { authenticate } from "./auth.ts";
+import type { Config } from "./config.js";
+import type { Db, ConversationRow } from "./db.js";
+import { createConversation, listConversations, getConversation, updateConversationTitle, touchConversation, deleteConversation, insertMessage, listMessages } from "./db.js";
+import type { RedisClient } from "./redis.js";
+import type { AuthContext, OAuthVerifier } from "./auth.js";
+import { authenticate } from "./auth.js";
 
 async function authenticateRequest(cfg: Config, oauth: OAuthVerifier | undefined, headers: Record<string, any>, db: Db, redis: RedisClient, reqIp?: string): Promise<AuthContext> {
   return authenticate(cfg, oauth, headers, db, redis, reqIp);
@@ -46,7 +46,28 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
       const auth = await authenticateRequest(cfg, oauth, req.headers as any, db, redis, (req as any).ip);
       (req as any).authContext = auth;
     } catch {
-      return reply.status(401).send({ error: "unauthorized" });
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    }
+  });
+
+  app.get("/chat-api/models", async (req, reply) => {
+    const clientAuthHeader = authHeaderFromRequest(req);
+    const injectRes = await app.inject({
+      method: "GET",
+      url: "/v1/models",
+      headers: {
+        authorization: clientAuthHeader,
+      },
+    });
+    reply.status(injectRes.statusCode);
+    const contentType = injectRes.headers["content-type"];
+    if (contentType) reply.header("content-type", String(contentType));
+    const payload = injectRes.body;
+    if (!payload) return reply.send({});
+    try {
+      return reply.send(JSON.parse(payload));
+    } catch {
+      return reply.send(payload);
     }
   });
 
@@ -66,21 +87,21 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
   app.delete("/chat-api/conversations/:id", async (req, reply) => {
     const auth = (req as any).authContext as AuthContext;
     const id = String((req.params as any).id ?? "");
-    if (!id) return reply.status(400).send({ error: "invalid id" });
+    if (!id) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const r = await deleteConversation(db, id, auth.principal);
-    if (r === "not_found") return reply.status(404).send({ error: "not found" });
+    if (r === "not_found") return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
     return { ok: true };
   });
 
   app.put("/chat-api/conversations/:id/title", async (req, reply) => {
     const auth = (req as any).authContext as AuthContext;
     const id = String((req.params as any).id ?? "");
-    if (!id) return reply.status(400).send({ error: "invalid id" });
+    if (!id) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const body = (req.body ?? {}) as any;
     const title = String(body.title ?? "").trim().slice(0, 200);
-    if (!title) return reply.status(400).send({ error: "title is required" });
+    if (!title) return reply.status(400).send({ error: { message: "title is required", type: "invalid_request_error" } });
     const conv = await getConversation(db, id, auth.principal);
-    if (!conv) return reply.status(404).send({ error: "not found" });
+    if (!conv) return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
     await updateConversationTitle(db, id, title);
     return { ok: true };
   });
@@ -88,9 +109,9 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
   app.get("/chat-api/conversations/:id/messages", async (req, reply) => {
     const auth = (req as any).authContext as AuthContext;
     const id = String((req.params as any).id ?? "");
-    if (!id) return reply.status(400).send({ error: "invalid id" });
+    if (!id) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const conv = await getConversation(db, id, auth.principal);
-    if (!conv) return reply.status(404).send({ error: "not found" });
+    if (!conv) return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
     const messages = await listMessages(db, id);
     return { messages };
   });
@@ -98,14 +119,14 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
   app.post("/chat-api/conversations/:id/chat", async (req, reply) => {
     const auth = (req as any).authContext as AuthContext;
     const id = String((req.params as any).id ?? "");
-    if (!id) return reply.status(400).send({ error: "invalid id" });
+    if (!id) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
     const conv = await getConversation(db, id, auth.principal);
-    if (!conv) return reply.status(404).send({ error: "not found" });
+    if (!conv) return reply.status(404).send({ error: { message: "not found", type: "not_found" } });
 
     const body = (req.body ?? {}) as any;
-    if (!body || typeof body !== "object") return reply.status(400).send({ error: "invalid body" });
-    if (typeof body.model !== "string" || !body.model.trim()) return reply.status(400).send({ error: "model is required" });
-    if (typeof body.message !== "string" || !body.message.trim()) return reply.status(400).send({ error: "message is required" });
+    if (!body || typeof body !== "object") return reply.status(400).send({ error: { message: "invalid body", type: "invalid_request_error" } });
+    if (typeof body.model !== "string" || !body.model.trim()) return reply.status(400).send({ error: { message: "model is required", type: "invalid_request_error" } });
+    if (typeof body.message !== "string" || !body.message.trim()) return reply.status(400).send({ error: { message: "message is required", type: "invalid_request_error" } });
 
     const model = body.model.trim();
     const userMessage = body.message.trim();
@@ -161,7 +182,7 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
 
       const bodyText = injectRes.body;
       if (status >= 400) {
-        return reply.send(bodyText || { error: "upstream error" });
+        return reply.send(bodyText || { error: { message: "upstream error", type: "gateway_error" } });
       }
 
       let parsed: any;
@@ -180,7 +201,10 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
       return reply.send(parsed ?? bodyText);
     }
 
-    if (cfg.port <= 0) return reply.status(500).send({ error: "streaming not available" });
+    if (cfg.port <= 0) return reply.status(500).send({ error: { message: "streaming not available", type: "gateway_error" } });
+
+    const upstreamAbort = new AbortController();
+    req.raw.on("close", () => { upstreamAbort.abort(); });
 
     const upstream = await fetch(`http://127.0.0.1:${cfg.port}/v1/chat/completions`, {
       method: "POST",
@@ -190,6 +214,7 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
         accept: "text/event-stream",
       },
       body: JSON.stringify(payload),
+      signal: upstreamAbort.signal,
     });
 
     reply.status(upstream.status);
@@ -227,7 +252,8 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
           responseText += final;
           yield Buffer.from(final);
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
         throw err;
       } finally {
         reader.releaseLock();

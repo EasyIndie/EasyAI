@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { Readable } from "node:stream";
-import { cacheGet, cacheSet, decideCache } from "./cache.ts";
-import type { Config } from "./config.ts";
-import type { Db } from "./db.ts";
-import { insertUsageEvent } from "./db.ts";
-import type { RedisClient } from "./redis.ts";
-import { checkTpm, enforceRpm, recordTpm } from "./rate_limit.ts";
+import { cacheGet, cacheSet, decideCache } from "./cache.js";
+import type { Config } from "./config.js";
+import type { Db } from "./db.js";
+import { insertUsageEvent } from "./db.js";
+import type { RedisClient } from "./redis.js";
+import { checkTpm, enforceRpm, recordTpm } from "./rate_limit.js";
 import {
   httpRequestDurationSeconds,
   httpRequestsTotal,
@@ -13,10 +13,10 @@ import {
   cacheHitsTotal,
   ttftDurationSeconds,
   tpsTokensPerSecond,
-} from "./metrics.ts";
-import type { AuthContext } from "./auth.ts";
-import { UpstreamPool } from "./upstreams.ts";
-import { checkInputGuardrails, maskPiiJson, maskPiiText } from "./guardrails.ts";
+} from "./metrics.js";
+import type { AuthContext } from "./auth.js";
+import { UpstreamPool } from "./upstreams.js";
+import { checkInputGuardrails, maskPiiJson, maskPiiText } from "./guardrails.js";
 
 function jsonBytes(v: unknown): number {
   try {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideCache } from "../src/cache.ts";
+import { decideCache } from "../src/cache.js";
 
 test("decideCache: caches deterministic chat completions", () => {
   const d = decideCache("/v1/chat/completions", {

@@ -1,9 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { sha256Hex } from "./crypto.ts";
-import type { Config } from "./config.ts";
-import type { Db } from "./db.ts";
-import { findActiveApiKeyByHash, findTenant } from "./db.ts";
-import type { RedisClient } from "./redis.ts";
+import { sha256Hex } from "./crypto.js";
+import type { Config } from "./config.js";
+import type { Db } from "./db.js";
+import { findActiveApiKeyByHash, findTenant } from "./db.js";
+import type { RedisClient } from "./redis.js";
 
 function normalizeIp(raw?: string): string | undefined {
   if (!raw) return;

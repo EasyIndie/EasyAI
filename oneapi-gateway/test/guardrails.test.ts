@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDefaultGuardrails, checkInputGuardrails, containsInternalIp, maskPiiText } from "../src/guardrails.ts";
+import { buildDefaultGuardrails, checkInputGuardrails, containsInternalIp, maskPiiText } from "../src/guardrails.js";
 
 test("guardrails: contains internal ipv4", () => {
   assert.equal(containsInternalIp("connect 10.0.0.1"), true);

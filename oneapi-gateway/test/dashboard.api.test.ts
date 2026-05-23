@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerDashboard } from "../src/dashboard.ts";
-import type { Config } from "../src/config.ts";
+import { registerDashboard } from "../src/dashboard.js";
+import type { Config } from "../src/config.js";
 
 function basic(u: string, p: string) {
   return "Basic " + Buffer.from(`${u}:${p}`, "utf8").toString("base64");
@@ -28,6 +28,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: "test-internal",
     internalTokenAllowCidrs: undefined,
     redisUrl: "redis://x",

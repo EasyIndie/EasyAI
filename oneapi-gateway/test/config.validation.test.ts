@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import yaml from "js-yaml";
-import { loadConfig } from "../src/config.ts";
+import { loadConfig } from "../src/config.js";
 
 async function withConfig(configObj: any, fn: () => void | Promise<void>) {
   const tmpDir = os.tmpdir();

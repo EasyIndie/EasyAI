@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { UpstreamPool } from "../src/upstreams.ts";
+import { UpstreamPool } from "../src/upstreams.js";
 
 test("UpstreamPool: round robin", () => {
   const pool = new UpstreamPool(["http://a", "http://b"]);

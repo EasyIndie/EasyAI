@@ -128,6 +128,7 @@ kubectl apply -k k8s/combined
 
 **说明**：
 - `k8s/combined/base` 包含完整组件：oneapi、litellm、ollama、redis、postgres、batch-worker 及 NetworkPolicy 安全基线
+- OneAPI 与 Batch Worker 统一采用 **YAML-only** 配置来源（挂载 `oneapi-config` ConfigMap 的 `/app/config/oneapi.yaml`），不再依赖 `ONEAPI_*` 环境变量。
 - NetworkPolicy 默认拒绝入站，仅放通必要的服务间访问
 - 部署后，配置将通过 ConfigMap 自动从项目中的 `oneapi.yaml` 和 `litellm.yaml` 加载
 

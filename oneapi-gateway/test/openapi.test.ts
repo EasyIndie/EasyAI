@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerOpenApi } from "../src/openapi.ts";
-import type { Config } from "../src/config.ts";
+import { registerOpenApi } from "../src/openapi.js";
+import type { Config } from "../src/config.js";
 
 test("openapi: serves spec and docs", async () => {
   const cfg: Config = {
@@ -24,6 +24,7 @@ test("openapi: serves spec and docs", async () => {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: undefined,
     internalTokenAllowCidrs: undefined,
     redisUrl: "redis://x",

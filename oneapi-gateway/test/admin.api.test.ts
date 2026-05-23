@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerAdminApi } from "../src/admin.ts";
-import type { Config } from "../src/config.ts";
+import { registerAdminApi } from "../src/admin.js";
+import type { Config } from "../src/config.js";
 
 function basic(u: string, p: string) {
   return "Basic " + Buffer.from(`${u}:${p}`, "utf8").toString("base64");
@@ -28,6 +28,7 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
     cacheReplayMaxTotalMs: 0,
     cacheReplayMode: "fixed",
     guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
     internalToken: "dev-internal",
     redisUrl: "redis://x",
     databaseUrl: "postgres://x",

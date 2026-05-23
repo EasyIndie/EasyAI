@@ -32,6 +32,11 @@ export type Config = {
     injectionKeywords: string[];
     piiMaskEnabled: boolean;
   };
+  corsOrigin: string | string[];
+  tls?: {
+    certPath: string;
+    keyPath: string;
+  };
   internalToken?: string;
   internalTokenAllowCidrs?: string[] | null;
   redisUrl: string;
@@ -55,7 +60,7 @@ export function loadConfig(): Config {
   }
 
   const appEnv = parsed.app_env || "development";
-  const port = Number(parsed.port ?? 8080);
+  const port = Number(parsed.port ?? 3003);
   const logLevel = parsed.log_level ?? "info";
   const trustProxy = parsed.trust_proxy ?? false;
 
@@ -87,6 +92,14 @@ export function loadConfig(): Config {
   const guardBlockInternalIp = guardrails.block_internal_ip ?? true;
   const guardPiiMaskEnabled = guardrails.pii_mask_enabled ?? true;
   const injectionKeywords = Array.isArray(guardrails.injection_keywords) ? guardrails.injection_keywords : [];
+
+  const corsConfig = parsed.cors || {};
+  const corsOrigin = corsConfig.origin ?? "*";
+
+  const tlsConfig = parsed.tls || {};
+  const tls = (tlsConfig.cert_path && tlsConfig.key_path)
+    ? { certPath: String(tlsConfig.cert_path), keyPath: String(tlsConfig.key_path) }
+    : undefined;
 
   const internalToken = parsed.internal_token;
   let internalTokenAllowCidrs: string[] | null | undefined = undefined;
@@ -141,6 +154,8 @@ export function loadConfig(): Config {
       injectionKeywords,
       piiMaskEnabled: guardPiiMaskEnabled,
     },
+    corsOrigin,
+    tls,
     internalToken,
     internalTokenAllowCidrs,
     redisUrl,
