@@ -41,13 +41,12 @@
   - OpenAPI 规范: `/openapi.json`
   - 管理后台: `/dashboard`
   - 内置聊天界面: `/chat`
-- AnythingLLM: `http://localhost:3000`
-  - 默认通过 OpenAI 兼容接口连接 EasyAI
-  - 适合作为可选图形化聊天界面
 - Batch Worker: 自动运行，消费 Redis 队列中的批处理任务
 - Redis: `localhost:6379`（缓存、限流、队列）
 - PostgreSQL: `localhost:5432`（用量统计、租户、Key 管理、对话存储）
 - Ollama: `localhost:11434`（本地模型推理）
+
+AnythingLLM 不再随默认 Compose 启动。如需使用外部图形化聊天客户端，可按部署文档中的可选集成方式接入 EasyAI 的 OpenAI 兼容接口。
 
 ## 部署模式
 

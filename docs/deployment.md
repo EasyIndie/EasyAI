@@ -29,19 +29,7 @@ curl -sS http://localhost:4000/healthz
 - 内置聊天界面：`http://localhost:3003/chat`
 - Swagger API 文档：`http://localhost:3003/docs`
 
-如需同时启用外部图形化聊天界面，可直接访问：
-
-```text
-http://localhost:3000
-```
-
-AnythingLLM 已在 `docker-compose.yml` 中预配置为通过 OneAPI 的 OpenAI 兼容接口工作：
-
-- LLM Provider：`generic-openai`
-- Base URL：`http://oneapi:3003/v1`
-- API Key：`dev-key`
-- 默认模型：`local/ollama:qwen2.5:0.5b`
-- 如需切换其它模型，可在 AnythingLLM 设置页中调整默认模型或工作区模型配置
+默认 Compose 不再启动 AnythingLLM。项目内置聊天界面已覆盖基础对话、会话管理和流式输出；如需外部图形化聊天客户端，可参考 [5. 可选：AnythingLLM 接入](#5-可选anythingllm-接入)。
 
 通过网关发起一次测试请求：
 
@@ -81,19 +69,7 @@ docker compose -f docker-compose.lite.yml up -d --build
 curl -sS http://localhost:4000/healthz
 ```
 
-Lite 模式下也会同时启动 AnythingLLM，默认地址同样为：
-
-```text
-http://localhost:3000
-```
-
-此时 AnythingLLM 直接连接 LiteLLM：
-
-- LLM Provider：`generic-openai`
-- Base URL：`http://litellm:4000/v1`
-- API Key：`lite-mode`
-- 默认模型：`local/ollama:qwen2.5:0.5b`
-- Lite 模式没有 OneAPI 鉴权和租户能力，AnythingLLM 主要用于本地调试和体验
+Lite 模式不再默认启动 AnythingLLM。如需外部图形化客户端，可将客户端的 OpenAI-compatible Base URL 指向 `http://localhost:4000/v1`，模型使用 `local/ollama:qwen2.5:0.5b`。
 
 直接向 LiteLLM 发起测试请求（无需 API Key，需使用配置全称）：
 
@@ -151,3 +127,32 @@ Production overlay 会将环境设置为 `production`，并采用更严格的容
 
 - **OneAPI 网关配置**：[config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
 - **LiteLLM 代理配置**：[config/litellm/litellm.yaml](../config/litellm/litellm.yaml)
+
+---
+
+## 5. 可选：AnythingLLM 接入
+
+EasyAI 默认使用内置 Chat UI（`/chat`），不再把 AnythingLLM 作为默认运行依赖。若仍希望使用 AnythingLLM，可通过可选 Compose overlay 启动：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.anythingllm.yml up -d --build
+```
+
+访问地址：
+
+```text
+http://localhost:3000
+```
+
+该 overlay 会将 AnythingLLM 配置为连接 OneAPI：
+
+- LLM Provider：`generic-openai`
+- Base URL：`http://oneapi:3003/v1`
+- API Key：`dev-key`
+- 默认模型：`chat`
+
+如果使用外部安装的 AnythingLLM，请在其设置中填入：
+
+- Base URL：`http://<easyai-host>:3003/v1`
+- API Key：`<your-api-key>`
+- Model：`chat` 或 `coder`

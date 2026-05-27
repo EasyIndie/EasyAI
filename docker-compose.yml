@@ -54,24 +54,6 @@ services:
       - postgres
       - litellm
 
-  anythingllm:
-    image: mintplexlabs/anythingllm:latest
-    restart: unless-stopped
-    ports:
-      - "3000:3001"
-    environment:
-      STORAGE_DIR: /app/server/storage
-      JWT_SECRET: easyai-anythingllm-dev-secret
-      LLM_PROVIDER: generic-openai
-      GENERIC_OPEN_AI_BASE_PATH: http://oneapi:3003/v1
-      GENERIC_OPEN_AI_API_KEY: dev-key
-      GENERIC_OPEN_AI_MODEL_PREF: local/ollama:qwen2.5:0.5b
-      GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: 32768
-    volumes:
-      - anythingllm_storage:/app/server/storage
-    depends_on:
-      - oneapi
-
   batch_worker:
     build:
       context: ./batch-worker
@@ -88,4 +70,3 @@ services:
 volumes:
   postgres_data:
   ollama_data:
-  anythingllm_storage:
