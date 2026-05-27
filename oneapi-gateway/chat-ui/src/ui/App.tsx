@@ -18,6 +18,7 @@ type Message = {
 };
 
 const LS_KEY = "easyai_chat_api_key";
+const DEFAULT_DEV_KEY = "dev-key";
 
 function getStoredKey(): string | null {
   try {
@@ -50,7 +51,9 @@ async function fetchJson(url: string, init?: RequestInit) {
     ...authHeaders(),
     accept: "application/json",
   };
-  if (init?.method !== "GET") headers["content-type"] = "application/json";
+  if (init?.method !== "GET" && init?.body !== undefined && init?.body !== null) {
+    headers["content-type"] = "application/json";
+  }
 
   const res = await fetch(url, {
     ...init,
@@ -93,7 +96,8 @@ function formatTime(s: string): string {
 
 export function App() {
   const [apiKey, setApiKey] = useState<string | null>(getStoredKey);
-  const [keyInput, setKeyInput] = useState("");
+  const [keyInput, setKeyInput] = useState(getStoredKey() ?? DEFAULT_DEV_KEY);
+  const [loginError, setLoginError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -109,6 +113,7 @@ export function App() {
   const [convLoading, setConvLoading] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -145,6 +150,7 @@ export function App() {
       setConversations(data?.conversations ?? []);
     } catch (e: any) {
       if (e?.message?.includes("unauthorized")) {
+        setLoginError("登录已失效，请重新输入 API Key。");
         handleLogout();
         return;
       }
@@ -163,14 +169,26 @@ export function App() {
   const handleLogin = useCallback(async () => {
     const key = keyInput.trim();
     if (!key) return;
-    setStoredKey(key);
-    setApiKey(key);
-    setKeyInput("");
+    setLoginError("");
+    try {
+      const res = await fetch("/chat-api/models", {
+        headers: {
+          authorization: `Bearer ${key}`,
+          accept: "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("invalid_api_key");
+      setStoredKey(key);
+      setApiKey(key);
+    } catch {
+      setLoginError("API Key 无效或服务未就绪，请检查后重试。");
+    }
   }, [keyInput]);
 
   function handleLogout() {
     clearStoredKey();
     setApiKey(null);
+    setKeyInput(DEFAULT_DEV_KEY);
     setConversations([]);
     setCurrentId(null);
     setMessages([]);
@@ -212,10 +230,12 @@ export function App() {
       if (isStreaming) return;
       try {
         await fetchJson(`/chat-api/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+        setConversations((prev) => prev.filter((c) => c.id !== id));
         if (currentId === id) {
           setCurrentId(null);
           setMessages([]);
           setStreamContent("");
+          setStatus("会话已删除");
         }
         await loadConversations();
       } catch (e: any) {
@@ -224,6 +244,29 @@ export function App() {
     },
     [isStreaming, currentId, loadConversations],
   );
+
+  const handleCloseConversation = useCallback(() => {
+    if (isStreaming) return;
+    setCurrentId(null);
+    setMessages([]);
+    setStreamContent("");
+    setStatus("");
+  }, [isStreaming]);
+
+  const requestDeleteConversation = useCallback(
+    (id: string, title?: string) => {
+      if (isStreaming) return;
+      setPendingDelete({ id, title: title?.trim() || "新对话" });
+    },
+    [isStreaming],
+  );
+
+  const confirmDeleteConversation = useCallback(async () => {
+    const target = pendingDelete;
+    if (!target) return;
+    setPendingDelete(null);
+    await handleDeleteConversation(target.id);
+  }, [pendingDelete, handleDeleteConversation]);
 
   useEffect(() => {
     if (apiKey) {
@@ -242,16 +285,34 @@ export function App() {
 
   const handleSend = useCallback(async () => {
     const msg = inputText.trim();
-    if (!msg || isStreaming || !currentId || !selectedModel) return;
+    if (!msg || isStreaming || !selectedModel) return;
 
     setInputText("");
     setIsStreaming(true);
     setStreamContent("");
     setStatus("发送中...");
 
+    let activeConvId: string;
+    if (!currentId) {
+      try {
+        const created = await fetchJson("/chat-api/conversations", { method: "POST" });
+        const createdId = created?.id;
+        if (!createdId || typeof createdId !== "string") throw new Error("创建会话失败");
+        activeConvId = createdId;
+        setCurrentId(activeConvId);
+        await loadConversations();
+      } catch (e: any) {
+        setIsStreaming(false);
+        setStatus(e?.message ?? "创建会话失败");
+        return;
+      }
+    } else {
+      activeConvId = currentId;
+    }
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
-      conversation_id: currentId,
+      conversation_id: activeConvId,
       role: "user",
       content: msg,
       model: selectedModel,
@@ -271,7 +332,7 @@ export function App() {
         stream: true,
       });
 
-      const res = await fetch(`/chat-api/conversations/${encodeURIComponent(currentId)}/chat`, {
+      const res = await fetch(`/chat-api/conversations/${encodeURIComponent(activeConvId)}/chat`, {
         method: "POST",
         headers: {
           ...authHeaders(),
@@ -325,7 +386,7 @@ export function App() {
 
       const assistantMsg: Message = {
         id: crypto.randomUUID(),
-        conversation_id: currentId,
+        conversation_id: activeConvId,
         role: "assistant",
         content: output,
         model: selectedModel,
@@ -342,7 +403,7 @@ export function App() {
         setStatus(e?.message ?? "请求失败");
         const errMsg: Message = {
           id: crypto.randomUUID(),
-          conversation_id: currentId,
+          conversation_id: activeConvId,
           role: "assistant",
           content: `**错误:** ${e?.message ?? "请求失败"}`,
           model: selectedModel,
@@ -440,6 +501,11 @@ export function App() {
           >
             登录
           </button>
+          {loginError && (
+            <div style={{ marginTop: 12, color: "#d93025", fontSize: 13 }}>
+              {loginError}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -568,7 +634,7 @@ export function App() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteConversation(conv.id);
+                    requestDeleteConversation(conv.id, conv.title);
                   }}
                   disabled={isStreaming}
                   style={{
@@ -685,6 +751,40 @@ export function App() {
 
           {status && (
             <span style={{ fontSize: 12, color: "#999", marginLeft: "auto" }}>{status}</span>
+          )}
+          {currentConv && (
+            <button
+              onClick={handleCloseConversation}
+              disabled={isStreaming}
+              style={{
+                border: "1px solid #ddd",
+                background: "transparent",
+                borderRadius: 6,
+                padding: "4px 10px",
+                fontSize: 12,
+                color: isStreaming ? "#999" : "#666",
+                cursor: isStreaming ? "default" : "pointer",
+              }}
+            >
+              关闭会话
+            </button>
+          )}
+          {currentConv && (
+            <button
+              onClick={() => requestDeleteConversation(currentConv.id, currentConv.title)}
+              disabled={isStreaming}
+              style={{
+                border: "1px solid #f5c2c2",
+                background: "#fff5f5",
+                borderRadius: 6,
+                padding: "4px 10px",
+                fontSize: 12,
+                color: isStreaming ? "#caa" : "#d93025",
+                cursor: isStreaming ? "default" : "pointer",
+              }}
+            >
+              删除会话
+            </button>
           )}
         </div>
 
@@ -821,8 +921,8 @@ export function App() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={currentConv ? "输入消息，Enter 发送，Shift+Enter 换行..." : "请先创建或选择一个对话"}
-              disabled={isStreaming || !currentConv}
+              placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
+              disabled={isStreaming}
               rows={2}
               style={{
                 flex: 1,
@@ -837,16 +937,16 @@ export function App() {
             />
             <button
               onClick={handleSend}
-              disabled={!inputText.trim() || isStreaming || !currentConv || !selectedModel}
+              disabled={!inputText.trim() || isStreaming || !selectedModel}
               style={{
                 padding: "10px 24px",
                 borderRadius: 8,
                 border: "none",
-                background: inputText.trim() && !isStreaming && currentConv && selectedModel ? "#1a73e8" : "#ccc",
+                background: inputText.trim() && !isStreaming && selectedModel ? "#1a73e8" : "#ccc",
                 color: "#fff",
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: inputText.trim() && !isStreaming && currentConv && selectedModel ? "pointer" : "default",
+                cursor: inputText.trim() && !isStreaming && selectedModel ? "pointer" : "default",
                 whiteSpace: "nowrap",
               }}
             >
@@ -855,6 +955,67 @@ export function App() {
           </div>
         </div>
       </div>
+      {pendingDelete && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            style={{
+              width: 420,
+              maxWidth: "92vw",
+              background: "#fff",
+              borderRadius: 12,
+              boxShadow: "0 12px 36px rgba(0,0,0,0.2)",
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>确认删除会话？</div>
+            <div style={{ fontSize: 14, color: "#555", lineHeight: 1.6, marginBottom: 16 }}>
+              该操作不可撤销。将删除会话及其全部消息：<br />
+              <span style={{ color: "#111", fontWeight: 600 }}>{pendingDelete.title}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setPendingDelete(null)}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDeleteConversation}
+                style={{
+                  border: "1px solid #d93025",
+                  background: "#d93025",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

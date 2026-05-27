@@ -68,3 +68,5 @@
 - [docs/local-model-benchmark.md](docs/local-model-benchmark.md)（本机模型实测报告：内存占用、耗时与模型对比）
 - [docs/development.md](docs/development.md)（开发/测试/安全基线/文档校验）
 - [docs/architecture.md](docs/architecture.md)（架构与请求流）
+- [docs/feature-doc-matrix-user.md](docs/feature-doc-matrix-user.md)（功能-文档映射矩阵：对外版）
+- [docs/feature-doc-matrix-maintainer.md](docs/feature-doc-matrix-maintainer.md)（功能-文档映射矩阵：对内版）
