@@ -2,9 +2,32 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3003}"
-API_KEY="${API_KEY:-dev-key}"
-ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASS="${ADMIN_PASS:-admin}"
+CONFIG_FILE="${CONFIG_FILE:-config/oneapi/oneapi.yaml}"
+
+read_yaml_value() {
+  local key="$1"
+  awk -v key="$key" '
+    function clean(v) {
+      sub(/^[[:space:]]+/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      sub(/^"/, "", v)
+      sub(/"$/, "", v)
+      return v
+    }
+    key == "api_key" && $0 ~ /^  api_keys:/ { in_api_keys=1; next }
+    in_api_keys && $0 ~ /^    - / { sub(/^    - /, ""); print clean($0); exit }
+    in_api_keys && $0 !~ /^    / { in_api_keys=0 }
+
+    $0 ~ /^    user:/ && in_admin && key == "admin_user" { sub(/^    user:[[:space:]]*/, ""); print clean($0); exit }
+    $0 ~ /^    password:/ && in_admin && key == "admin_pass" { sub(/^    password:[[:space:]]*/, ""); print clean($0); exit }
+    $0 ~ /^  admin:/ { in_admin=1; next }
+    in_admin && $0 !~ /^    / { in_admin=0 }
+  ' "$CONFIG_FILE"
+}
+
+API_KEY="${API_KEY:-$(read_yaml_value api_key)}"
+ADMIN_USER="${ADMIN_USER:-$(read_yaml_value admin_user)}"
+ADMIN_PASS="${ADMIN_PASS:-$(read_yaml_value admin_pass)}"
 
 json() {
   command jq -e . >/dev/null 2>&1
@@ -32,7 +55,7 @@ echo "[6/6] batch queue and status"
 BATCH_ID="$(curl -fsS -X POST "$BASE_URL/v1/batches" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"requests":[{"endpoint":"/v1/chat/completions","body":{"model":"chat","messages":[{"role":"user","content":"batch-smoke"}],"temperature":0}}]}' | jq -r '.id')"
+  -d '{"requests":[{"endpoint":"/v1/chat/completions","body":{"model":"chat","messages":[{"role":"user","content":"batch-smoke"}],"temperature":0}}]}' | jq -r '.batch_id // .id')"
 
 if [[ -z "$BATCH_ID" || "$BATCH_ID" == "null" ]]; then
   echo "batch id missing"

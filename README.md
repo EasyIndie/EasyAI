@@ -7,7 +7,7 @@
 - **Batch Worker**: 异步批处理任务消费者，处理通过 API 提交的批量请求。
 - **Chat UI**: 内置聊天界面，支持对话管理和流式输出。
 
-## 快速启动 (组合模式, Docker)
+## 快速启动 (完整模式, Docker)
 
 1. 启动服务（将自动加载 `config/oneapi/oneapi.yaml` 中的配置）：
 
@@ -15,12 +15,12 @@
    docker compose up -d --build
    ```
 
-2. 调用网关（请替换您的 API Key）：
+2. 调用网关（请使用 `config/oneapi/oneapi.yaml` 中 `security.api_keys` 配置的 Key）：
 
    ```bash
    curl http://localhost:3003/v1/chat/completions \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer dev-key" \
+     -H "Authorization: Bearer <api-key>" \
      -d '{
       "model":"chat",
        "messages":[{"role":"user","content":"Hello!"}],
@@ -30,39 +30,31 @@
 
 ## 提供的服务
 
-- LiteLLM: `http://localhost:4000`
-  - 健康检查: `/healthz`
-  - 指标监控: `/metrics`
-  - OpenAI 兼容接口: `/v1/*`
 - OneAPI 网关: `http://localhost:3003`
+  - 首页导航: `/`
   - 健康检查: `/healthz`
   - 指标监控: `/metrics`
   - API 文档 (Swagger UI): `/docs`
   - OpenAPI 规范: `/openapi.json`
   - 管理后台: `/dashboard`
   - 内置聊天界面: `/chat`
+- LiteLLM: Docker 内网服务 `http://litellm:4000`，不默认发布到宿主机
 - Batch Worker: 自动运行，消费 Redis 队列中的批处理任务
-- Redis: `localhost:6379`（缓存、限流、队列）
-- PostgreSQL: `localhost:5432`（用量统计、租户、Key 管理、对话存储）
-- Ollama: `localhost:11434`（本地模型推理）
-
-AnythingLLM 不再随默认 Compose 启动。如需使用外部图形化聊天客户端，可按部署文档中的可选集成方式接入 EasyAI 的 OpenAI 兼容接口。
+- Redis: Docker 内网服务 `redis:6379`（缓存、限流、队列）
+- PostgreSQL: Docker 内网服务 `postgres:5432`（用量统计、租户、Key 管理、对话存储）
+- Ollama: Docker 内网服务 `ollama:11434`（本地模型推理）
 
 ## 部署模式
 
-本项目支持两种部署模式：
-
-- **Combined 模式**（完整版）：包含 OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker，适合生产环境
-- **Lite 模式**（轻量版）：仅 LiteLLM + Ollama，去除网关和数据库，适合个人开发测试
+本项目仅保留完整模式：包含 OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker + Ollama，统一使用根目录的 `docker-compose.yml` 启动。
 
 详情请参考部署文档。
 
 ## 项目文档
 
 详情请参考：
-- [docs/lite-mode-quickstart.md](docs/lite-mode-quickstart.md)（Lite 轻量模式：快速启动与排障指南）
 - [docs/user-manual.md](docs/user-manual.md)（产品使用手册 + 常用 API 速查）
-- [docs/deployment.md](docs/deployment.md)（部署：Combined 组合模式 / Lite 轻量模式 / K8S）
+- [docs/deployment.md](docs/deployment.md)（部署：完整模式 / K8S）
 - [docs/operations.md](docs/operations.md)（运行手册：发布前检查 + 排障 + 一键清库）
 - [docs/local-model-benchmark.md](docs/local-model-benchmark.md)（本机模型实测报告：内存占用、耗时与模型对比）
 - [docs/development.md](docs/development.md)（开发/测试/安全基线/文档校验）

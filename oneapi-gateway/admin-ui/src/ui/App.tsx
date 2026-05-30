@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "usage" | "keys" | "tenants" | "playground";
+type Tab = "usage" | "keys" | "tenants";
 
 type UsageRow = {
   principal: string;
@@ -294,7 +294,6 @@ export function App() {
   const title = useMemo(() => {
     if (tab === "usage") return "用量统计";
     if (tab === "keys") return "API 密钥";
-    if (tab === "playground") return "模型测试";
     return "租户管理";
   }, [tab]);
 
@@ -603,9 +602,6 @@ export function App() {
       loadTenants();
       loadKeys();
     }
-    if (tab === "playground") {
-      loadPlaygroundModels();
-    }
   }, [tab]);
 
   useEffect(() => {
@@ -673,9 +669,6 @@ export function App() {
         </button>
         <button onClick={() => setTab("tenants")} disabled={tab === "tenants"}>
           租户管理
-        </button>
-        <button onClick={() => setTab("playground")} disabled={tab === "playground"}>
-          模型测试
         </button>
         <span style={{ marginLeft: 8, color: "#666" }}>{status}</span>
       </div>
@@ -986,118 +979,6 @@ export function App() {
         </div>
       ) : null}
 
-      {tab === "playground" ? (
-        <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-            <label>
-              模型：
-              <select
-                value={playgroundModel}
-                onChange={(e) => setPlaygroundModel(e.currentTarget.value)}
-                style={{ marginLeft: 8, minWidth: 320 }}
-              >
-                <option value="">请选择模型</option>
-                {playgroundModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              温度：
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                max={2}
-                value={playgroundTemperature}
-                onChange={(e) => setPlaygroundTemperature(e.currentTarget.value)}
-                style={{ marginLeft: 8, width: 90 }}
-              />
-            </label>
-            <label>
-              最大 Tokens：
-              <input
-                type="number"
-                min={1}
-                value={playgroundMaxTokens}
-                onChange={(e) => setPlaygroundMaxTokens(e.currentTarget.value)}
-                style={{ marginLeft: 8, width: 110 }}
-              />
-            </label>
-            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={playgroundStream}
-                onChange={(e) => setPlaygroundStream(e.currentTarget.checked)}
-              />
-              流式输出
-            </label>
-            <button onClick={loadPlaygroundModels}>刷新模型</button>
-            <button onClick={runPlayground} disabled={playgroundLoading || !playgroundModel.trim()}>
-              {playgroundLoading ? "请求中..." : "发送请求"}
-            </button>
-            <button onClick={stopPlayground} disabled={!playgroundLoading}>
-              停止输出
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gap: 12 }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>系统提示词</span>
-              <textarea
-                value={playgroundSystemPrompt}
-                onChange={(e) => setPlaygroundSystemPrompt(e.currentTarget.value)}
-                rows={4}
-                style={{ width: "100%", fontFamily: "inherit" }}
-              />
-            </label>
-
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>用户消息</span>
-              <textarea
-                value={playgroundUserPrompt}
-                onChange={(e) => setPlaygroundUserPrompt(e.currentTarget.value)}
-                rows={8}
-                placeholder="请输入要测试的问题或指令"
-                style={{ width: "100%", fontFamily: "inherit" }}
-              />
-            </label>
-          </div>
-
-          <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 12, color: "#666", fontSize: 14, flexWrap: "wrap" }}>
-            <span>模型数量：{playgroundModels.length}</span>
-            <span>调用方式：{playgroundStream ? "流式" : "非流式"}</span>
-            {playgroundLatencyMs !== null ? <span>耗时：{playgroundLatencyMs} ms</span> : null}
-            {playgroundUsage ? <span>{playgroundUsage}</span> : null}
-          </div>
-
-          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-            <div>
-              <div style={{ marginBottom: 6, fontWeight: 600 }}>模型返回</div>
-              <textarea
-                readOnly
-                value={playgroundResult}
-                rows={10}
-                placeholder="请求返回内容会显示在这里"
-                style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-              />
-            </div>
-
-            <div>
-              <div style={{ marginBottom: 6, fontWeight: 600 }}>原始 JSON</div>
-              <textarea
-                readOnly
-                value={playgroundRaw}
-                rows={16}
-                placeholder="原始响应 JSON 会显示在这里"
-                style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

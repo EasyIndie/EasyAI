@@ -17,8 +17,9 @@ type Message = {
   created_at: string;
 };
 
+type ViewMode = "chat" | "test";
+
 const LS_KEY = "easyai_chat_api_key";
-const DEFAULT_DEV_KEY = "dev-key";
 
 function getStoredKey(): string | null {
   try {
@@ -94,10 +95,60 @@ function formatTime(s: string): string {
   return d.toISOString().replace("T", " ").slice(0, 16);
 }
 
+function extractAssistantText(payload: any): string {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        try {
+          return JSON.stringify(part);
+        } catch {
+          return String(part ?? "");
+        }
+      })
+      .join("\n");
+  }
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload ?? "");
+  }
+}
+
+function formatUsage(payload: any): string {
+  const usage = payload?.usage;
+  if (!usage || typeof usage !== "object") return "";
+  const prompt = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : "-";
+  const completion = typeof usage.completion_tokens === "number" ? usage.completion_tokens : "-";
+  const total = typeof usage.total_tokens === "number" ? usage.total_tokens : "-";
+  return `Prompt ${prompt} / Completion ${completion} / Total ${total}`;
+}
+
+function extractStreamChunkText(payload: any): string {
+  const delta = payload?.choices?.[0]?.delta;
+  if (typeof delta?.content === "string") return delta.content;
+  if (Array.isArray(delta?.content)) {
+    return delta.content
+      .map((part: any) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        return "";
+      })
+      .join("");
+  }
+  const message = payload?.choices?.[0]?.message;
+  if (typeof message?.content === "string") return message.content;
+  return "";
+}
+
 export function App() {
   const [apiKey, setApiKey] = useState<string | null>(getStoredKey);
-  const [keyInput, setKeyInput] = useState(getStoredKey() ?? DEFAULT_DEV_KEY);
+  const [keyInput, setKeyInput] = useState(getStoredKey() ?? "");
   const [loginError, setLoginError] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("chat");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -110,12 +161,21 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [temperature, setTemperature] = useState("0.7");
   const [maxTokens, setMaxTokens] = useState("2048");
+  const [testSystemPrompt, setTestSystemPrompt] = useState("你是一个有帮助的 AI 助手。");
+  const [testUserPrompt, setTestUserPrompt] = useState("");
+  const [testStream, setTestStream] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState("");
+  const [testRaw, setTestRaw] = useState("");
+  const [testUsage, setTestUsage] = useState("");
+  const [testLatencyMs, setTestLatencyMs] = useState<number | null>(null);
   const [convLoading, setConvLoading] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const testAbortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -188,12 +248,21 @@ export function App() {
   function handleLogout() {
     clearStoredKey();
     setApiKey(null);
-    setKeyInput(DEFAULT_DEV_KEY);
+    setKeyInput("");
+    setViewMode("chat");
     setConversations([]);
     setCurrentId(null);
     setMessages([]);
     setIsStreaming(false);
     setStreamContent("");
+    setTestLoading(false);
+    setTestResult("");
+    setTestRaw("");
+    setTestUsage("");
+    setTestLatencyMs(null);
+    setTestUserPrompt("");
+    testAbortRef.current?.abort();
+    testAbortRef.current = null;
     abortRef.current?.abort();
     abortRef.current = null;
   }
@@ -282,6 +351,15 @@ export function App() {
       setMessages([]);
     }
   }, [currentId, loadMessages]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      testAbortRef.current?.abort();
+      testAbortRef.current = null;
+    };
+  }, []);
 
   const handleSend = useCallback(async () => {
     const msg = inputText.trim();
@@ -424,6 +502,147 @@ export function App() {
     setIsStreaming(false);
     setStatus("已停止");
   }, []);
+
+  const handleStopTest = useCallback(() => {
+    testAbortRef.current?.abort();
+    testAbortRef.current = null;
+    setTestLoading(false);
+    setStatus("已停止");
+  }, []);
+
+  const runTest = useCallback(async () => {
+    const model = selectedModel.trim();
+    const userPrompt = testUserPrompt.trim();
+    if (!model) {
+      setStatus("请先选择模型");
+      return;
+    }
+    if (!userPrompt) {
+      setStatus("请输入用户消息");
+      return;
+    }
+
+    const messagesPayload: Array<{ role: string; content: string }> = [];
+    if (testSystemPrompt.trim()) {
+      messagesPayload.push({ role: "system", content: testSystemPrompt.trim() });
+    }
+    messagesPayload.push({ role: "user", content: userPrompt });
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: messagesPayload,
+      stream: testStream,
+    };
+    if (temperature.trim()) body.temperature = Number(temperature);
+    if (maxTokens.trim()) body.max_tokens = Number(maxTokens);
+
+    setTestLoading(true);
+    setTestResult("");
+    setTestRaw("");
+    setTestUsage("");
+    setTestLatencyMs(null);
+    setStatus("请求中...");
+
+    const startedAt = performance.now();
+    const controller = new AbortController();
+    testAbortRef.current = controller;
+
+    try {
+      if (testStream) {
+        const res = await fetch("/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            ...authHeaders(),
+            accept: "text/event-stream",
+            "content-type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || String(res.status));
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("stream not supported by browser");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let raw = "";
+        let output = "";
+        let usageText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          raw += chunk;
+          buffer += chunk;
+          setTestRaw(raw);
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const event of events) {
+            const lines = event
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("data: "));
+            for (const line of lines) {
+              const dataText = line.slice(6);
+              if (dataText === "[DONE]") continue;
+              let parsed: any;
+              try {
+                parsed = JSON.parse(dataText);
+              } catch {
+                continue;
+              }
+              if (parsed?.error?.message) {
+                throw new Error(String(parsed.error.message));
+              }
+              const text = extractStreamChunkText(parsed);
+              if (text) {
+                output += text;
+                setTestResult(output);
+              }
+              const nextUsage = formatUsage(parsed);
+              if (nextUsage) {
+                usageText = nextUsage;
+                setTestUsage(nextUsage);
+              }
+            }
+          }
+        }
+
+        const latency = Math.round(performance.now() - startedAt);
+        setTestLatencyMs(latency);
+        setTestUsage((current) => current || usageText);
+        setStatus("成功");
+      } else {
+        const data = await fetchJson("/v1/chat/completions", {
+          method: "POST",
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+        const latency = Math.round(performance.now() - startedAt);
+        setTestLatencyMs(latency);
+        setTestResult(extractAssistantText(data));
+        setTestRaw(JSON.stringify(data, null, 2));
+        setTestUsage(formatUsage(data));
+        setStatus("成功");
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        setStatus("已停止");
+      } else {
+        setStatus(e?.message ?? "失败");
+      }
+    } finally {
+      if (testAbortRef.current === controller) {
+        testAbortRef.current = null;
+      }
+      setTestLoading(false);
+    }
+  }, [maxTokens, selectedModel, temperature, testStream, testSystemPrompt, testUserPrompt]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -699,6 +918,34 @@ export function App() {
           gap: 12,
           flexWrap: "wrap",
         }}>
+          <button
+            onClick={() => setViewMode("chat")}
+            style={{
+              border: "1px solid #ddd",
+              background: viewMode === "chat" ? "#1a73e8" : "transparent",
+              color: viewMode === "chat" ? "#fff" : "#666",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            对话
+          </button>
+          <button
+            onClick={() => setViewMode("test")}
+            style={{
+              border: "1px solid #ddd",
+              background: viewMode === "test" ? "#1a73e8" : "transparent",
+              color: viewMode === "test" ? "#fff" : "#666",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            模型测试
+          </button>
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
@@ -749,6 +996,23 @@ export function App() {
             </button>
           )}
 
+          {viewMode === "test" && testLoading && (
+            <button
+              onClick={handleStopTest}
+              style={{
+                border: "none",
+                background: "#e74c3c",
+                color: "#fff",
+                borderRadius: 6,
+                padding: "4px 14px",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              停止测试
+            </button>
+          )}
+
           {status && (
             <span style={{ fontSize: 12, color: "#999", marginLeft: "auto" }}>{status}</span>
           )}
@@ -788,172 +1052,349 @@ export function App() {
           )}
         </div>
 
-        {/* Settings panel */}
-        {showSettings && (
+        {viewMode === "chat" ? (
+          <>
+            {/* Settings panel */}
+            {showSettings && (
+              <div style={{
+                padding: "12px 24px",
+                borderBottom: "1px solid #e8e8e8",
+                display: "flex",
+                gap: 24,
+                fontSize: 13,
+                background: "#fafafa",
+                flexWrap: "wrap",
+              }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "#666" }}>温度:</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min={0}
+                    max={2}
+                    value={temperature}
+                    onChange={(e) => setTemperature(e.target.value)}
+                    style={{ width: 70, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
+                  />
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "#666" }}>最大 Tokens:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={32768}
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(e.target.value)}
+                    style={{ width: 90, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Messages */}
+            <div style={{
+              flex: 1,
+              overflow: "auto",
+              padding: 24,
+            }}>
+              {!currentConv && (
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  color: "#ccc",
+                  fontSize: 16,
+                }}>
+                  <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>💬</div>
+                  <div>选择或创建一个对话开始聊天</div>
+                </div>
+              )}
+
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  style={{
+                    marginBottom: 20,
+                    display: "flex",
+                    justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <div style={{
+                    maxWidth: "75%",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    background: msg.role === "user" ? "#1a73e8" : "#f0f0f0",
+                    color: msg.role === "user" ? "#fff" : "#1a1a1a",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "break-word",
+                  }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {isStreaming && streamContent && (
+                <div style={{
+                  marginBottom: 20,
+                  display: "flex",
+                  justifyContent: "flex-start",
+                }}>
+                  <div style={{
+                    maxWidth: "75%",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    background: "#f0f0f0",
+                    color: "#1a1a1a",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "break-word",
+                  }}>
+                    {streamContent}
+                    <span style={{
+                      display: "inline-block",
+                      width: 8,
+                      height: 16,
+                      background: "#1a73e8",
+                      marginLeft: 2,
+                      animation: "blink 1s infinite",
+                      verticalAlign: "middle",
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input area */}
+            <div style={{
+              padding: "16px 24px",
+              borderTop: "1px solid #e8e8e8",
+              background: "#fafafa",
+            }}>
+              <div style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-end",
+              }}>
+                <textarea
+                  ref={inputRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
+                  disabled={isStreaming}
+                  rows={2}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    resize: "none",
+                    lineHeight: 1.5,
+                  }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!inputText.trim() || isStreaming || !selectedModel}
+                  style={{
+                    padding: "10px 24px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: inputText.trim() && !isStreaming && selectedModel ? "#1a73e8" : "#ccc",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: inputText.trim() && !isStreaming && selectedModel ? "pointer" : "default",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  发送
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
           <div style={{
-            padding: "12px 24px",
-            borderBottom: "1px solid #e8e8e8",
-            display: "flex",
-            gap: 24,
-            fontSize: 13,
-            background: "#fafafa",
-            flexWrap: "wrap",
+            flex: 1,
+            overflow: "auto",
+            padding: 24,
           }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#666" }}>温度:</span>
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                max={2}
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-                style={{ width: 70, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
-              />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#666" }}>最大 Tokens:</span>
-              <input
-                type="number"
-                min={1}
-                max={32768}
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(e.target.value)}
-                style={{ width: 90, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
-              />
-            </label>
+            <div style={{ display: "grid", gap: 12 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ color: "#666", fontSize: 13 }}>系统提示词</span>
+                <textarea
+                  value={testSystemPrompt}
+                  onChange={(e) => setTestSystemPrompt(e.target.value)}
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ color: "#666", fontSize: 13 }}>用户消息</span>
+                <textarea
+                  value={testUserPrompt}
+                  onChange={(e) => setTestUserPrompt(e.target.value)}
+                  rows={8}
+                  placeholder="请输入要测试的问题或指令"
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </label>
+            </div>
+
+            <div style={{
+              display: "flex",
+              gap: 16,
+              alignItems: "center",
+              marginTop: 14,
+              color: "#666",
+              fontSize: 13,
+              flexWrap: "wrap",
+            }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={testStream}
+                  onChange={(e) => setTestStream(e.currentTarget.checked)}
+                />
+                流式输出
+              </label>
+              <span>模型数量：{modelList.length}</span>
+              <span>调用模型：{selectedModel || "未选择"}</span>
+              <span>温度：{temperature}</span>
+              <span>最大 Tokens：{maxTokens}</span>
+              {testLatencyMs !== null ? <span>耗时：{testLatencyMs} ms</span> : null}
+              {testUsage ? <span>{testUsage}</span> : null}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+              <button
+                onClick={runTest}
+                disabled={testLoading || !selectedModel.trim()}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: testLoading || !selectedModel.trim() ? "#ccc" : "#1a73e8",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: testLoading || !selectedModel.trim() ? "default" : "pointer",
+                }}
+              >
+                {testLoading ? "请求中..." : "发送测试请求"}
+              </button>
+              <button
+                onClick={handleStopTest}
+                disabled={!testLoading}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  color: "#666",
+                  fontSize: 14,
+                  cursor: testLoading ? "pointer" : "default",
+                }}
+              >
+                停止输出
+              </button>
+              <button
+                onClick={() => {
+                  setTestUserPrompt("");
+                  setTestResult("");
+                  setTestRaw("");
+                  setTestUsage("");
+                  setTestLatencyMs(null);
+                }}
+                disabled={testLoading}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  color: "#666",
+                  fontSize: 14,
+                  cursor: testLoading ? "default" : "pointer",
+                }}
+              >
+                清空结果
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+              <div>
+                <div style={{ marginBottom: 6, fontWeight: 600 }}>模型返回</div>
+                <textarea
+                  readOnly
+                  value={testResult}
+                  rows={10}
+                  placeholder="请求返回内容会显示在这里"
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    fontSize: 14,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div>
+                <div style={{ marginBottom: 6, fontWeight: 600 }}>原始 JSON</div>
+                <textarea
+                  readOnly
+                  value={testRaw}
+                  rows={16}
+                  placeholder="原始响应 JSON 会显示在这里"
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    fontSize: 13,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
           </div>
         )}
-
-        {/* Messages */}
-        <div style={{
-          flex: 1,
-          overflow: "auto",
-          padding: 24,
-        }}>
-          {!currentConv && (
-            <div style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "100%",
-              color: "#ccc",
-              fontSize: 16,
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>💬</div>
-              <div>选择或创建一个对话开始聊天</div>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              style={{
-                marginBottom: 20,
-                display: "flex",
-                justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-              }}
-            >
-              <div style={{
-                maxWidth: "75%",
-                padding: "12px 16px",
-                borderRadius: 12,
-                background: msg.role === "user" ? "#1a73e8" : "#f0f0f0",
-                color: msg.role === "user" ? "#fff" : "#1a1a1a",
-                fontSize: 14,
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "break-word",
-              }}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-
-          {isStreaming && streamContent && (
-            <div style={{
-              marginBottom: 20,
-              display: "flex",
-              justifyContent: "flex-start",
-            }}>
-              <div style={{
-                maxWidth: "75%",
-                padding: "12px 16px",
-                borderRadius: 12,
-                background: "#f0f0f0",
-                color: "#1a1a1a",
-                fontSize: 14,
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "break-word",
-              }}>
-                {streamContent}
-                <span style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 16,
-                  background: "#1a73e8",
-                  marginLeft: 2,
-                  animation: "blink 1s infinite",
-                  verticalAlign: "middle",
-                }} />
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input area */}
-        <div style={{
-          padding: "16px 24px",
-          borderTop: "1px solid #e8e8e8",
-          background: "#fafafa",
-        }}>
-          <div style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "flex-end",
-          }}>
-            <textarea
-              ref={inputRef}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
-              disabled={isStreaming}
-              rows={2}
-              style={{
-                flex: 1,
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                fontSize: 14,
-                fontFamily: "inherit",
-                resize: "none",
-                lineHeight: 1.5,
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!inputText.trim() || isStreaming || !selectedModel}
-              style={{
-                padding: "10px 24px",
-                borderRadius: 8,
-                border: "none",
-                background: inputText.trim() && !isStreaming && selectedModel ? "#1a73e8" : "#ccc",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: inputText.trim() && !isStreaming && selectedModel ? "pointer" : "default",
-                whiteSpace: "nowrap",
-              }}
-            >
-              发送
-            </button>
-          </div>
-        </div>
       </div>
       {pendingDelete && (
         <div

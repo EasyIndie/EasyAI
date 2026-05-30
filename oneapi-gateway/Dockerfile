@@ -2,13 +2,11 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json /app/
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 COPY src /app/src
-COPY admin-ui /app/admin-ui
-COPY chat-ui /app/chat-ui
 RUN npx tsc -p tsconfig.build.json
-RUN cd /app/admin-ui && npm ci && npm run build
-RUN cd /app/chat-ui && npm ci && npm run build
+COPY admin-ui/dist /app/admin-ui/dist
+COPY chat-ui/dist /app/chat-ui/dist
 
 FROM node:22-alpine
 

@@ -1,5 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import fastifyStatic from "@fastify/static";
+import { createRequire } from "node:module";
+import path from "node:path";
 import type { Config } from "./config.js";
+
+const require = createRequire(import.meta.url);
+const swaggerUiAssetRoot = path.dirname(require.resolve("swagger-ui-dist/swagger-ui-bundle.js"));
 
 function buildSpec(cfg: Config) {
   const securitySchemes = {
@@ -199,10 +205,28 @@ function buildSpec(cfg: Config) {
 export async function registerOpenApi(app: FastifyInstance, cfg: Config): Promise<void> {
   const spec = buildSpec(cfg);
 
+  await app.register(fastifyStatic, {
+    root: swaggerUiAssetRoot,
+    prefix: "/docs/assets/",
+    decorateReply: false,
+  });
+
   app.get("/openapi.json", async (_req, reply) => {
     reply.header("content-type", "application/json; charset=utf-8");
     reply.header("cache-control", "no-store");
     return spec;
+  });
+
+  app.get("/docs/init.js", async (_req, reply) => {
+    reply.header("content-type", "application/javascript; charset=utf-8");
+    reply.header("cache-control", "no-store");
+    return `
+window.ui = SwaggerUIBundle({
+  url: "/openapi.json",
+  dom_id: "#swagger-ui",
+  deepLinking: true
+});
+`;
   });
 
   app.get("/docs", async (_req, reply) => {
@@ -214,20 +238,13 @@ export async function registerOpenApi(app: FastifyInstance, cfg: Config): Promis
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OneAPI Gateway API Docs</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+    <link rel="stylesheet" href="/docs/assets/swagger-ui.css" />
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <script>
-      window.ui = SwaggerUIBundle({
-        url: "/openapi.json",
-        dom_id: "#swagger-ui",
-        deepLinking: true
-      });
-    </script>
+    <script src="/docs/assets/swagger-ui-bundle.js"></script>
+    <script src="/docs/init.js"></script>
   </body>
 </html>`;
   });
 }
-

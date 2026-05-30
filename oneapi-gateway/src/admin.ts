@@ -17,6 +17,7 @@ import {
   upsertTenant,
 } from "./db.js";
 import type { RedisClient } from "./redis.js";
+import { ipAllowed } from "./net.js";
 
 function basicAuthOk(authHeader: string | undefined, user: string, pass: string): boolean {
   if (!authHeader) return false;
@@ -31,7 +32,7 @@ function basicAuthOk(authHeader: string | undefined, user: string, pass: string)
 }
 
 function requireAdmin(req: any, cfg: Config): boolean {
-  return basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+  return ipAllowed(req.ip, cfg.adminAllowedCidrs) && basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
 }
 
 function requireAdminAction(req: any): boolean {
