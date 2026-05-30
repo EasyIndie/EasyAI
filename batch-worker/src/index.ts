@@ -17,7 +17,7 @@ type BatchItemRow = {
 };
 
 function loadConfig() {
-  const configPath = process.env.ONEAPI_CONFIG_PATH ?? "/app/config/oneapi.yaml";
+  const configPath = "/app/config/oneapi.yaml";
   if (!fs.existsSync(configPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
@@ -27,9 +27,15 @@ function loadConfig() {
     throw new Error("Invalid YAML configuration");
   }
   
-  const redisUrl = parsed.redis_url ?? "redis://localhost:6379";
-  const databaseUrl = parsed.database_url ?? "postgres://oneapi:oneapi@localhost:5432/oneapi";
-  const internalToken = parsed.internal_token;
+  const database = parsed.database || {};
+  const internal = parsed.internal || parsed.security?.internal || {};
+  const redisUrl = database.redis_url ?? parsed.redis_url ?? "redis://localhost:6379";
+  const databaseUrl = database.url ?? (
+    database.host
+      ? `postgres://${encodeURIComponent(String(database.user ?? "oneapi"))}:${encodeURIComponent(String(database.password ?? "oneapi"))}@${database.host}:${Number(database.port ?? 5432)}/${encodeURIComponent(String(database.name ?? "oneapi"))}`
+      : parsed.database_url ?? "postgres://oneapi:oneapi@localhost:5432/oneapi"
+  );
+  const internalToken = internal.token ?? parsed.internal_token;
   if (!internalToken) throw new Error("Missing internal_token in config");
   
   const bw = parsed.batch_worker || {};

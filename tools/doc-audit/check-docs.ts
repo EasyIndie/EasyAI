@@ -83,18 +83,8 @@ for (const f of [path.join(repoRoot, "README.md")].filter(exists)) docFiles.push
 
 const referencedEnvVars = new Map<string, Set<string>>();
 const referencedPaths = new Map<string, Set<string>>();
-const forbiddenTokens = ["ONEAPI_AUTH_MODES"];
-
 for (const f of docFiles) {
   const text = readText(f);
-  for (const tok of forbiddenTokens) {
-    if (text.includes(tok)) {
-      const s = referencedEnvVars.get(tok) ?? new Set<string>();
-      s.add(rel(f));
-      referencedEnvVars.set(tok, s);
-    }
-  }
-
   for (const v of extractEnvVarsFromText(text)) {
     const s = referencedEnvVars.get(v) ?? new Set<string>();
     s.add(rel(f));
@@ -110,12 +100,12 @@ for (const f of docFiles) {
 const knownExternalVars = new Set<string>(["BASE_URL", "API_KEY", "API_KEYS", "APP_ENV"]);
 
 const sourceSearchFiles: string[] = [];
-for (const r of ["oneapi-gateway/src", "batch-worker/src", "litellm-service/app", "config", "k8s", "docker-compose.yml", ".env.example"]) {
+for (const r of ["oneapi-gateway/src", "batch-worker/src", "litellm-service/app", "config", "docker-compose.yml"]) {
   const p = path.join(repoRoot, r);
   if (!exists(p)) continue;
   const stat = fs.statSync(p);
   if (stat.isFile()) sourceSearchFiles.push(p);
-  else walk(p, [".ts", ".tsx", ".py", ".yaml", ".yml", ".env", ".example", ".md"], sourceSearchFiles);
+  else walk(p, [".ts", ".tsx", ".py", ".yaml", ".yml", ".md"], sourceSearchFiles);
 }
 
 const sourceBlob = sourceSearchFiles.map((p) => `\n### ${rel(p)}\n${readText(p)}`).join("\n");
@@ -123,13 +113,9 @@ const sourceBlob = sourceSearchFiles.map((p) => `\n### ${rel(p)}\n${readText(p)}
 const errors: string[] = [];
 
 for (const [v, files] of referencedEnvVars.entries()) {
-  if (forbiddenTokens.includes(v)) {
-    errors.push(`Forbidden token "${v}" found in: ${[...files].join(", ")}`);
-    continue;
-  }
   if (knownExternalVars.has(v)) continue;
   if (!sourceBlob.includes(v)) {
-    errors.push(`Env var "${v}" referenced in docs but not found in code/config/compose/k8s. Refs: ${[...files].join(", ")}`);
+    errors.push(`Env var "${v}" referenced in docs but not found in code/config/compose. Refs: ${[...files].join(", ")}`);
   }
 }
 

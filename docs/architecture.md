@@ -66,26 +66,34 @@ flowchart LR
 
 ### LiteLLM 专属参数
 - 配置文件: [litellm.yaml](../config/litellm/litellm.yaml)
-- 运行时环境变量:
-  - `LITELLM_CONFIG_PATH`
-  - `OLLAMA_HOST`
+- 核心参数:
+  - `service.allowed_models`
+  - `service.log_level`
+  - `providers.ollama.api_base`
+  - `model_aliases`
+
+未配置 `service.allowed_models` 时，LiteLLM 会自动将 `model_aliases` 的键作为允许模型列表。
 
 ### OneAPI 网关设置
 - 配置文件: [config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
 - 核心参数:
-  - `auth_modes`, `api_keys`
-  - `oauth.jwks_url`, `oauth.audience`, `oauth.issuer`
-  - `upstreams`, `upstream_timeout_ms`
-  - `rate_limit_rpm`
-  - `cache.enabled`, `cache.ttl_seconds`, `cache.replay_mode`, `cache.replay_chunk_delay_ms`, `cache.replay_max_total_ms`
-  - `model_map`, `fallback_map`
-  - `guardrails.*`
-  - `internal_token`（启用 Batch 和内部鉴权的必备开关）
-  - `internal_token_allow_cidrs`
+  - `server.env`, `server.port`, `server.body_limit`, `server.trust_proxy`
+  - `security.auth_modes`, `security.api_keys`
+  - `security.oauth.jwks_url`, `security.oauth.audience`, `security.oauth.issuer`
+  - `security.admin.user`, `security.admin.password`, `security.admin.allowed_cidrs`
+  - `security.metrics_allowed_cidrs`, `security.security_headers`
+  - `database.redis_url`, `database.host`, `database.port`, `database.user`, `database.password`, `database.name`
+  - `gateway.upstreams`, `gateway.upstream_timeout_ms`
+  - `gateway.rate_limit_rpm`
+  - `gateway.cache.enabled`, `gateway.cache.ttl_seconds`, `gateway.cache.replay_mode`, `gateway.cache.replay_chunk_delay_ms`, `gateway.cache.replay_max_total_ms`
+  - `gateway.model_map`, `gateway.fallback_map`
+  - `gateway.guardrails.*`
+  - `internal.token`（启用 Batch 和内部鉴权的必备开关）
+  - `internal.allow_cidrs`
 
 ### 组合运行参数
-- 组合模式环境模板: 已合并至各组件独立配置文件中
-- 组合部署 K8s 清单: [k8s/combined](../k8s/combined)
+- 组合模式配置: 已合并至各组件 YAML 配置和 `docker-compose.yml`
+- 组合部署入口: [docker-compose.yml](../docker-compose.yml)
 
 ## 可观测性
 

@@ -1,14 +1,10 @@
 service:
+  log_level: info
   default_timeout_ms: 120000
-  allowed_models:
-    - local/ollama:qwen2.5:0.5b
-    - local/ollama:qwen2.5-coder:1.5b
-    - local/ollama:gemma4:e4b
-    - local/ollama:gemma4:e2b
 
 providers:
   ollama:
-    api_base_env: OLLAMA_HOST
+    api_base: http://ollama:11434
 
 model_aliases:
   local/ollama:qwen2.5:0.5b:

@@ -14,6 +14,6 @@
     "run:peak": "npm run build:peak && k6 run dist/peak"
   },
   "devDependencies": {
-    "esbuild": "^0.25.1"
+    "esbuild": "^0.28.0"
   }
 }

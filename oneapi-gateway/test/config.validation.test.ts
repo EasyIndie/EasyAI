@@ -6,19 +6,14 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { loadConfig } from "../src/config.js";
 
-async function withConfig(configObj: any, fn: () => void | Promise<void>) {
+async function withConfig(configObj: any, fn: (configPath: string) => void | Promise<void>) {
   const tmpDir = os.tmpdir();
   const tmpFile = path.join(tmpDir, `test-config-${Date.now()}-${Math.random()}.yaml`);
   fs.writeFileSync(tmpFile, yaml.dump(configObj), "utf8");
-  
-  const prevPath = process.env.ONEAPI_CONFIG_PATH;
-  process.env.ONEAPI_CONFIG_PATH = tmpFile;
-  
+
   try {
-    await fn();
+    await fn(tmpFile);
   } finally {
-    if (prevPath === undefined) delete process.env.ONEAPI_CONFIG_PATH;
-    else process.env.ONEAPI_CONFIG_PATH = prevPath;
     fs.unlinkSync(tmpFile);
   }
 }
@@ -31,8 +26,8 @@ test("loadConfig: production blocks default admin credentials", async () => {
       admin_pass: "admin",
       api_keys: ["k1"]
     },
-    async () => {
-      assert.throws(() => loadConfig(), /default admin credentials/i);
+    async (tmpFile) => {
+      assert.throws(() => loadConfig(tmpFile), /default admin credentials/i);
     },
   );
 });
@@ -45,8 +40,8 @@ test("loadConfig: production blocks dev-key", async () => {
       admin_pass: "p",
       api_keys: ["dev-key"]
     },
-    async () => {
-      assert.throws(() => loadConfig(), /dev-key/);
+    async (tmpFile) => {
+      assert.throws(() => loadConfig(tmpFile), /dev-key/);
     },
   );
 });
@@ -59,12 +54,11 @@ test("loadConfig: production requires JWKS when oauth enabled", async () => {
       admin_pass: "p",
       auth_modes: ["apikey", "oauth"],
       api_keys: ["k1"],
+      database_url: "postgres://oneapi:strong-password@postgres:5432/oneapi",
       oauth: { jwks_url: "" }
     },
-    async () => {
-      assert.throws(() => loadConfig(), /oauth.jwks_url is required/);
+    async (tmpFile) => {
+      assert.throws(() => loadConfig(tmpFile), /oauth.jwks_url is required/);
     },
   );
 });
-
-

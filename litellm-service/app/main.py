@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import time
 from typing import Any, Dict, Optional, Tuple
 
@@ -18,7 +17,6 @@ logger = logging.getLogger("litellm-service")
 handler = logging.StreamHandler()
 handler.setFormatter(jsonlogger.JsonFormatter("%(message)s %(levelname)s %(name)s %(asctime)s"))
 logger.addHandler(handler)
-logger.setLevel(os.getenv("LITELLM_LOG_LEVEL", "info").upper())
 
 
 REQUESTS_TOTAL = Counter(
@@ -44,10 +42,10 @@ def _validate_config(cfg: Dict[str, Any]) -> None:
         raise ValueError("service must be a map")
     allowed = service.get("allowed_models") or []
     if not isinstance(allowed, list) or any(not isinstance(x, str) or not x.strip() for x in allowed):
-        raise ValueError("service.allowed_models must be a non-empty list of strings")
+        raise ValueError("service.allowed_models must be a list of strings when configured")
     aliases = cfg.get("model_aliases") or {}
-    if not isinstance(aliases, dict):
-        raise ValueError("model_aliases must be a map")
+    if not isinstance(aliases, dict) or not aliases:
+        raise ValueError("model_aliases must be a non-empty map")
     for m in allowed:
         if m not in aliases:
             raise ValueError(f"allowed_models includes '{m}' but model_aliases has no such key")
@@ -72,9 +70,10 @@ def _validate_config(cfg: Dict[str, Any]) -> None:
             raise ValueError(f"model_aliases['{name}'] must include provider and model (or backends)")
 
 
-CONFIG_PATH = os.getenv("LITELLM_CONFIG_PATH", "/app/config/litellm.yaml")
+CONFIG_PATH = "/app/config/litellm.yaml"
 CONFIG = _load_config(CONFIG_PATH)
 _validate_config(CONFIG)
+logger.setLevel(str((CONFIG.get("service") or {}).get("log_level", "info")).upper())
 
 
 _RR_COUNTERS: Dict[str, int] = {}
@@ -100,17 +99,14 @@ def _resolve_backend(backend: dict) -> Tuple[str, Optional[str]]:
     provider = backend.get("provider")
     model = backend.get("model")
     api_base = backend.get("api_base")
-    api_base_env = backend.get("api_base_env")
     if not provider or not model:
         raise ValueError("backend must include provider and model")
-    if not api_base and api_base_env:
-        api_base = os.getenv(api_base_env)
     if provider == "ollama":
         if not api_base:
-            api_base_env = (CONFIG.get("providers", {}).get("ollama", {}) or {}).get("api_base_env", "OLLAMA_HOST")
-            api_base = os.getenv(api_base_env)
+            provider_cfg = (CONFIG.get("providers", {}).get("ollama", {}) or {})
+            api_base = provider_cfg.get("api_base")
         if not api_base:
-            raise ValueError("OLLAMA_HOST is required for ollama provider")
+            raise ValueError("providers.ollama.api_base is required for ollama provider")
         return f"ollama/{model}", api_base
     return f"{provider}/{model}", api_base
 
@@ -126,16 +122,20 @@ def _resolve_model(input_model: str, selector_key: Optional[str] = None) -> Tupl
         provider = alias.get("provider")
         model = alias.get("model")
         if provider == "ollama":
-            api_base = os.getenv((CONFIG.get("providers", {}).get("ollama", {}) or {}).get("api_base_env", "OLLAMA_HOST"))
+            provider_cfg = (CONFIG.get("providers", {}).get("ollama", {}) or {})
+            api_base = provider_cfg.get("api_base")
             if not api_base:
-                raise ValueError("OLLAMA_HOST is required for ollama provider")
+                raise ValueError("providers.ollama.api_base is required for ollama provider")
             return f"ollama/{model}", api_base
         return f"{provider}/{model}", None
     return input_model, None
 
 
 def _allowed_models() -> list[str]:
-    return list(((CONFIG.get("service") or {}).get("allowed_models") or []))
+    allowed = (CONFIG.get("service") or {}).get("allowed_models")
+    if allowed:
+        return list(allowed)
+    return list((CONFIG.get("model_aliases") or {}).keys())
 
 
 app = FastAPI(title="LiteLLM Service", version="0.1.0")

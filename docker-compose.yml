@@ -1,27 +1,23 @@
+x-postgres-password: &postgres_password "KVhkORQ+sPToe4lX4cGp5gbmmUMoxfw7YYHys4jUezk="
+
 services:
   redis:
-    image: redis:7-alpine
+    image: redis:8.6.3-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: oneapi
-      POSTGRES_PASSWORD: oneapi
+      POSTGRES_PASSWORD: *postgres_password
       POSTGRES_DB: oneapi
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
 
@@ -29,11 +25,6 @@ services:
     build:
       context: ./litellm-service
     restart: unless-stopped
-    environment:
-      LITELLM_CONFIG_PATH: /app/config/litellm.yaml
-      OLLAMA_HOST: http://ollama:11434
-    ports:
-      - "4000:4000"
     volumes:
       - ./config/litellm/litellm.yaml:/app/config/litellm.yaml
     depends_on:
@@ -43,8 +34,6 @@ services:
     build:
       context: ./oneapi-gateway
     restart: unless-stopped
-    environment:
-      ONEAPI_CONFIG_PATH: /app/config/oneapi.yaml
     ports:
       - "3003:3003"
     volumes:
@@ -54,30 +43,10 @@ services:
       - postgres
       - litellm
 
-  anythingllm:
-    image: mintplexlabs/anythingllm:latest
-    restart: unless-stopped
-    ports:
-      - "3000:3001"
-    environment:
-      STORAGE_DIR: /app/server/storage
-      JWT_SECRET: easyai-anythingllm-dev-secret
-      LLM_PROVIDER: generic-openai
-      GENERIC_OPEN_AI_BASE_PATH: http://oneapi:3003/v1
-      GENERIC_OPEN_AI_API_KEY: dev-key
-      GENERIC_OPEN_AI_MODEL_PREF: local/ollama:qwen2.5:0.5b
-      GENERIC_OPEN_AI_MODEL_TOKEN_LIMIT: 32768
-    volumes:
-      - anythingllm_storage:/app/server/storage
-    depends_on:
-      - oneapi
-
   batch_worker:
     build:
       context: ./batch-worker
     restart: unless-stopped
-    environment:
-      ONEAPI_CONFIG_PATH: /app/config/oneapi.yaml
     volumes:
       - ./config/oneapi/oneapi.yaml:/app/config/oneapi.yaml
     depends_on:
@@ -88,4 +57,3 @@ services:
 volumes:
   postgres_data:
   ollama_data:
-  anythingllm_storage:

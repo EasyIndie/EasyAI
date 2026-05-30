@@ -1,6 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fs from "node:fs";
@@ -16,12 +13,16 @@ import { registerAdminApi } from "./admin.js";
 import { registerBatchRoutes } from "./batch.js";
 import { registerOpenApi } from "./openapi.js";
 import { registerChatRoutes } from "./chat.js";
+import { ipAllowed } from "./net.js";
 
 const cfg = loadConfig();
 
 const app = Fastify({
-  logger: { level: cfg.logLevel },
-  bodyLimit: 10 * 1024 * 1024,
+  logger: {
+    level: cfg.logLevel,
+    redact: ["req.headers.authorization", "req.headers.x-api-key", "req.headers.x-oneapi-internal-token"],
+  },
+  bodyLimit: cfg.bodyLimitBytes ?? 10 * 1024 * 1024,
   trustProxy: cfg.trustProxy,
   ...(cfg.tls ? {
     https: {
@@ -38,6 +39,16 @@ const pool = new UpstreamPool(cfg.upstreams);
 
 await app.register(cors, { origin: cfg.corsOrigin });
 
+if (cfg.securityHeadersEnabled === true) {
+  app.addHook("onRequest", async (_req, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header("Cross-Origin-Resource-Policy", "same-origin");
+    reply.header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'");
+  });
+}
+
 app.get("/healthz", async () => {
   return {
     ok: true,
@@ -49,6 +60,9 @@ app.get("/healthz", async () => {
 });
 
 app.get("/metrics", async (_req, reply) => {
+  if (!ipAllowed((_req as any).ip, cfg.metricsAllowedCidrs)) {
+    return reply.status(403).send({ error: { message: "forbidden", type: "auth_error" } });
+  }
   reply.header("content-type", registry.contentType);
   return registry.metrics();
 });

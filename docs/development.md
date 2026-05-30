@@ -13,7 +13,7 @@
 - 工具脚本放在 `tools/` 下并使用 `.ts`
 
 Node 版本建议：
-- 推荐使用 Node 22（仓库根目录提供 `.nvmrc`）
+- 推荐使用 Node 25（仓库根目录提供 `.nvmrc`）
 
 ## 2. 单元/集成测试
 
@@ -73,11 +73,10 @@ docker compose build batch_worker
 
 ### 4.1 生产配置基线
 
-- 生产环境请在 `oneapi.yaml` 中设置 `app_env: "production"`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
-- 如启用 Batch/内部调用鉴权（`internal_token`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `internal_token_allow_cidrs` 覆盖，或设置为 `any` 关闭限制）。
-- 如果网关部署在反向代理/Ingress/LB 后，需要按实际链路设置 `trust_proxy: true`（可选配置跳数），以便基于真实客户端 IP 执行 internal token 的 CIDR 限制。
-- Kubernetes 默认启用 NetworkPolicy 安全基线（combined），如果你的集群未启用 CNI NetworkPolicy 或需额外放通（例如外部调用 litellm），需要按需调整策略。
-- 生产环境建议启用 Guardrails（`guardrails.enabled: true`）并配置 TLS。
+- 生产环境请在 `oneapi.yaml` 中设置 `server.env: "production"`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
+- 如启用 Batch/内部调用鉴权（`internal.token`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `internal.allow_cidrs` 覆盖，或设置为 `any` 关闭限制）。
+- 如果网关部署在反向代理/Ingress/LB 后，需要按实际链路设置 `server.trust_proxy: true`（可选配置跳数），以便基于真实客户端 IP 执行 internal token 的 CIDR 限制。
+- 生产环境建议启用 Guardrails（`gateway.guardrails.enabled: true`）并配置 TLS。
 
 ### 4.2 依赖扫描
 
