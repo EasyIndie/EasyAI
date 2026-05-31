@@ -7,7 +7,7 @@
 | 功能域 | 你可以做什么 | 主要文档 | 快速验收 |
 |---|---|---|---|
 | OpenAI 兼容 API | 用统一 `/v1/*` 访问模型能力 | [user-manual.md](./user-manual.md) | `POST /v1/chat/completions` |
-| 首页导航 | 集中进入聊天、管理后台、API 文档和 OpenAPI JSON | [user-manual.md](./user-manual.md) | 访问 `/` |
+| 首页导航 | 集中进入聊天、管理后台和 API 文档；OpenAPI JSON 入口位于 API 文档页 | [user-manual.md](./user-manual.md) | 访问 `/` 与 `/docs` |
 | 认证鉴权 | 使用 API Key 或 OAuth 调用接口 | [user-manual.md](./user-manual.md) | 用正确/错误凭据各调用一次 |
 | 多租户与配额 | 给租户配置 RPM/TPM，禁用租户 | [user-manual.md](./user-manual.md) | Dashboard 或 `/admin/api/tenants` |
 | 缓存与流式回放 | 对确定性请求启用缓存，流式命中回放 | [user-manual.md](./user-manual.md) | 相同请求调用两次看 `X-Cache` |

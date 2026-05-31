@@ -87,6 +87,20 @@ test("dashboard api: usage includes tenant and api key fields", async () => {
   assert.equal(j.rows[0].auth_mode, "apikey");
 });
 
+test("home page: links to docs instead of openapi json directly", async () => {
+  const cfg = makeConfig();
+  const db: any = { pool: { query: async () => ({ rows: [] }) }, close: async () => {} };
+  const app = Fastify({ logger: false });
+  await registerDashboard(app, cfg, db);
+
+  const r = await app.inject({ method: "GET", url: "/" });
+
+  assert.equal(r.statusCode, 200);
+  assert.ok(r.body.includes('href="/docs"'));
+  assert.equal(r.body.includes('href="/openapi.json"'), false);
+  assert.equal(r.body.includes("<h2>OpenAPI JSON</h2>"), false);
+});
+
 test("dashboard api: playground models proxies through internal auth", async () => {
   const cfg = makeConfig();
   const db: any = { pool: { query: async () => ({ rows: [] }) }, close: async () => {} };

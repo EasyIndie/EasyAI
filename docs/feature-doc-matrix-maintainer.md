@@ -7,7 +7,7 @@
 | 功能域 | 当前实现能力 | 主文档（产品/API） | 次文档（架构/运维/部署） | 验收与门禁 |
 |---|---|---|---|---|
 | 网关入口 | `/v1/*` 统一入口、转发、模型重写 | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [deployment.md](./deployment.md) | `scripts/smoke-compose.sh` |
-| 首页导航 | `/` 集中导航到 Chat、Dashboard、Docs、OpenAPI JSON | [user-manual.md](./user-manual.md) | [deployment.md](./deployment.md) | curl `/` |
+| 首页导航 | `/` 集中导航到 Chat、Dashboard、Docs；OpenAPI JSON 从 `/docs` 突出进入 | [user-manual.md](./user-manual.md) | [deployment.md](./deployment.md) | curl `/` + `/docs` |
 | 认证 | API Key、OAuth(JWKS)、internal token | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [development.md](./development.md) | `oneapi-gateway/test/auth.test.ts` |
 | 多租户治理 | tenant 绑定、tenant 配额、tenant 禁用 | [user-manual.md](./user-manual.md) | [operations.md](./operations.md) | `oneapi-gateway/test/admin.api.test.ts` |
 | 限流配额 | RPM（主体/租户）、TPM（租户） | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [operations.md](./operations.md) | `oneapi-gateway/test/rate_limit.test.ts` |

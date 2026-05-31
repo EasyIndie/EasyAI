@@ -21,7 +21,7 @@ function buildSpec(cfg: Config) {
       title: "OneAPI Gateway",
       version: "0.1.0",
       description:
-        "User-facing APIs for calling OpenAI-compatible endpoints via the gateway. Admin/Dashboard/Metrics endpoints are intentionally not included.",
+        "Public API reference for calling OpenAI-compatible model endpoints through EasyAI Gateway. It covers model listing, chat completions and asynchronous Batch API workflows. Admin, dashboard and metrics endpoints are intentionally excluded.",
     },
     servers: [{ url: "/" }],
     components: { securitySchemes },

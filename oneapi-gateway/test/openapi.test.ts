@@ -46,6 +46,11 @@ test("openapi: serves spec and docs", async () => {
   const r2 = await app.inject({ method: "GET", url: "/docs" });
   assert.equal(r2.statusCode, 200);
   assert.ok(r2.headers["content-type"]?.includes("text/html"));
-  assert.ok(r2.body.includes("/openapi.json"));
-});
+  assert.ok(r2.body.includes('id="swagger-ui"'));
+  assert.equal(r2.body.includes("查看 OpenAPI JSON"), false);
+  assert.equal(r2.body.includes("这里集中展示 EasyAI Gateway 对外开放的模型调用接口"), false);
 
+  const r3 = await app.inject({ method: "GET", url: "/docs/init.js" });
+  assert.equal(r3.statusCode, 200);
+  assert.ok(r3.body.includes("/openapi.json"));
+});

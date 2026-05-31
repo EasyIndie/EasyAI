@@ -61,13 +61,7 @@ function buildHomeHtml(cfg: Config): string {
       href: "/docs",
       label: "Swagger",
       title: "API 文档",
-      desc: "查看和调试 OpenAI-compatible API、Batch API 与模型列表接口。",
-    },
-    {
-      href: "/openapi.json",
-      label: "JSON",
-      title: "OpenAPI JSON",
-      desc: "供客户端生成、接口审计和自动化集成使用的机器可读规范。",
+      desc: "查看和调试 OpenAI-compatible API、Batch API 与模型列表接口，并获取 OpenAPI JSON。",
     },
   ];
   const capabilityItems = [
@@ -233,7 +227,7 @@ function buildHomeHtml(cfg: Config): string {
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
       margin-top: 20px;
     }
