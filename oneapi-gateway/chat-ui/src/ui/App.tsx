@@ -453,9 +453,12 @@ export function App() {
             } catch {
               continue;
             }
-            const delta = parsed?.choices?.[0]?.delta?.content;
-            if (typeof delta === "string") {
-              output += delta;
+            if (parsed?.error?.message) {
+              throw new Error(String(parsed.error.message));
+            }
+            const text = extractStreamChunkText(parsed);
+            if (text) {
+              output += text;
               setStreamContent(output);
             }
           }

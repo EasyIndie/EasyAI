@@ -204,7 +204,9 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
     if (cfg.port <= 0) return reply.status(500).send({ error: { message: "streaming not available", type: "gateway_error" } });
 
     const upstreamAbort = new AbortController();
-    req.raw.on("close", () => { upstreamAbort.abort(); });
+    reply.raw.on("close", () => {
+      if (!reply.raw.writableEnded) upstreamAbort.abort();
+    });
 
     const upstream = await fetch(`http://127.0.0.1:${cfg.port}/v1/chat/completions`, {
       method: "POST",

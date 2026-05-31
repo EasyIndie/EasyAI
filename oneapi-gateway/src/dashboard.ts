@@ -8,18 +8,7 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { getUsageSummary } from "./db.js";
 import { ipAllowed } from "./net.js";
-
-function basicAuthOk(authHeader: string | undefined, user: string, pass: string): boolean {
-  if (!authHeader) return false;
-  const m = authHeader.match(/^Basic\s+(.+)$/i);
-  if (!m) return false;
-  const decoded = Buffer.from(m[1]!, "base64").toString("utf8");
-  const idx = decoded.indexOf(":");
-  if (idx < 0) return false;
-  const u = decoded.slice(0, idx);
-  const p = decoded.slice(idx + 1);
-  return u === user && p === pass;
-}
+import { clearAdminSessionCookie, createAdminSessionCookie, isAdminRequest } from "./admin-auth.js";
 
 function requireAdminAction(req: any): boolean {
   const h = req.headers["x-oneapi-admin-action"];
@@ -41,29 +30,7 @@ function buildPlaygroundAuthHeaders(cfg: Config): Record<string, string> | undef
   return;
 }
 
-function buildHomeHtml(cfg: Config): string {
-  const authModes = Array.from(cfg.authModes.values()).join(", ") || "none";
-  const upstreams = cfg.upstreams.map((u) => `<code>${escapeHtml(u)}</code>`).join("");
-  const cards = [
-    {
-      href: "/chat",
-      label: "Chat UI",
-      title: "内置聊天",
-      desc: "普通用户输入 API Key 后进行对话，也可以在同页切换到模型测试。",
-    },
-    {
-      href: "/dashboard",
-      label: "Dashboard",
-      title: "管理后台",
-      desc: "管理 API Key、租户、用量统计，并查看运行状态与后台操作入口。",
-    },
-    {
-      href: "/docs",
-      label: "Swagger",
-      title: "API 文档",
-      desc: "查看和调试 OpenAI-compatible API、Batch API 与模型列表接口，并获取 OpenAPI JSON。",
-    },
-  ];
+function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): string {
   const capabilityItems = [
     "统一 OpenAI-compatible 入口，屏蔽上游模型服务差异",
     "支持 API Key / OAuth 调用，按租户做配额和限流治理",
@@ -79,24 +46,22 @@ function buildHomeHtml(cfg: Config): string {
       hint: "docker compose up -d --build",
     },
     {
-      title: "2. 进入入口",
-      body: "先打开首页查看概览；普通用户进入 Chat，管理员进入 Dashboard，开发者查看 Docs。",
-      hint: "http://localhost:3003/",
+      title: "2. 选择入口",
+      body: "普通用户进入会话页并输入 API Key；管理员先在首页登录后进入 Dashboard；开发者可直接打开 API 文档。",
+      hint: "Chat / Dashboard / Docs",
     },
     {
       title: "3. 开始使用",
-      body: "在 Dashboard 创建 API Key 并绑定租户，或者直接在 Chat 页输入 Key 开始对话；需要测试模型时切换到模型测试。",
-      hint: "Chat / Dashboard / Docs",
+      body: "管理员在 Dashboard 创建 API Key 并绑定租户；用户使用分配到的 Key 调用接口或进入会话页。",
+      hint: "API Key / Tenant / Usage",
     },
   ];
-  const serviceRows = [
-    ["首页", "/","快速了解服务能力和主要入口"],
-    ["聊天", "/chat","对话、历史、流式输出、模型测试"],
-    ["管理后台", "/dashboard","API Key、租户、用量、后台操作"],
-    ["文档", "/docs","Swagger UI 与 OpenAPI 规范"],
-    ["健康检查", "/healthz","服务状态和上游列表"],
-    ["指标", "/metrics","Prometheus 指标，仅允许受限 IP 访问"],
-  ];
+  const loginMessage = loginState === "failed"
+    ? `<div class="notice error">账号或密码错误。</div>`
+    : loginState === "required"
+      ? `<div class="notice">请先登录。</div>`
+      : "";
+  const loginOpen = loginState === "failed" || loginState === "required" ? " open" : "";
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -115,6 +80,7 @@ function buildHomeHtml(cfg: Config): string {
       --accent: #1769aa;
       --accent-strong: #0f4f87;
       --ok: #167a4a;
+      --danger: #b42318;
     }
     * { box-sizing: border-box; }
     body {
@@ -161,14 +127,63 @@ function buildHomeHtml(cfg: Config): string {
       font-size: 14px;
       font-weight: 600;
     }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      margin-left: auto;
+    }
+    .logout-form { margin: 0; }
+    .link-button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--accent-strong);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      padding: 8px 11px;
+      text-decoration: none;
+    }
+    .login-menu {
+      position: relative;
+    }
+    .login-menu summary {
+      list-style: none;
+    }
+    .login-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .login-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      z-index: 20;
+      width: min(320px, calc(100vw - 32px));
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(23, 32, 51, .12);
+      padding: 16px;
+    }
+    .login-popover h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+    .login-popover p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
     main {
       padding: 44px 0 56px;
     }
     .hero {
-      display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-      gap: 20px;
-      align-items: stretch;
       margin-bottom: 20px;
     }
     .intro {
@@ -197,81 +212,49 @@ function buildHomeHtml(cfg: Config): string {
       text-transform: uppercase;
       letter-spacing: .04em;
     }
-    .meta {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--panel);
-      padding: 18px;
-    }
-    .meta dl {
-      margin: 0;
+    .admin-form {
       display: grid;
-      gap: 12px;
+      gap: 10px;
+      margin-top: 12px;
     }
-    .meta dt {
+    .admin-form label {
+      display: grid;
+      gap: 6px;
       color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
+      font-size: 13px;
+      font-weight: 600;
     }
-    .meta dd {
-      margin: 4px 0 0;
-      font-size: 14px;
-      word-break: break-word;
-    }
-    .meta code {
-      display: block;
-      margin-top: 4px;
-      color: var(--accent-strong);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 20px;
-    }
-    .card {
-      display: flex;
-      flex-direction: column;
-      min-height: 188px;
-      padding: 18px;
+    .admin-form input {
+      width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
-      color: inherit;
-      background: var(--panel);
-      text-decoration: none;
-      transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+      padding: 11px 12px;
+      color: var(--text);
+      font: inherit;
     }
-    .card:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent);
-      box-shadow: 0 12px 28px rgba(23, 32, 51, .08);
+    .primary-button {
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      padding: 12px 14px;
     }
-    .label {
+    .notice {
+      margin: 10px 0 0;
+      border: 1px solid #b8c7dc;
+      border-radius: 8px;
+      background: #f4f8ff;
       color: var(--accent-strong);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
+      padding: 10px 12px;
+      font-size: 13px;
     }
-    .card h2 {
-      margin: 18px 0 8px;
-      font-size: 20px;
-      line-height: 1.25;
-      letter-spacing: 0;
-    }
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.55;
-    }
-    .go {
-      margin-top: auto;
-      padding-top: 20px;
-      color: var(--accent);
-      font-size: 14px;
-      font-weight: 700;
+    .notice.error {
+      border-color: #f2b8b5;
+      background: #fff5f5;
+      color: var(--danger);
     }
     .section {
       margin-top: 24px;
@@ -335,44 +318,17 @@ function buildHomeHtml(cfg: Config): string {
       font-size: 12px;
       word-break: break-word;
     }
-    .matrix {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 14px;
-    }
-    .matrix th,
-    .matrix td {
-      padding: 12px 10px;
-      border-top: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      font-size: 14px;
-    }
-    .matrix th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      width: 18%;
-    }
-    .matrix td:first-child {
-      font-weight: 700;
-      width: 18%;
-      white-space: nowrap;
-    }
     @media (max-width: 880px) {
-      .hero { grid-template-columns: 1fr; }
-      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .feature-list { grid-template-columns: 1fr; }
       .steps { grid-template-columns: 1fr; }
     }
     @media (max-width: 560px) {
       .wrap { width: min(100% - 24px, 1120px); }
       .top { align-items: flex-start; flex-direction: column; padding: 16px 0; }
+      .top-actions { width: 100%; align-items: center; justify-content: space-between; }
+      .login-popover { left: 0; right: auto; }
       main { padding: 28px 0 40px; }
       h1 { font-size: 28px; }
-      .grid { grid-template-columns: 1fr; }
-      .card { min-height: 154px; }
       .section { padding: 16px; }
     }
   </style>
@@ -381,25 +337,36 @@ function buildHomeHtml(cfg: Config): string {
   <header>
     <div class="wrap top">
       <div class="brand"><span class="mark">AI</span><span>EasyAI Console</span></div>
-      <div class="status">Gateway online</div>
+      <div class="top-actions">
+        <span class="status">Gateway online</span>
+        <a class="link-button" href="/chat">会话页</a>
+        <a class="link-button" href="/docs">API 文档</a>
+        ${isAdmin ? `<span>已登录</span><a class="link-button" href="/dashboard">Dashboard</a><form class="logout-form" action="/admin/session/logout" method="post"><button class="link-button" type="submit">退出</button></form>` : `
+          <details class="login-menu"${loginOpen}>
+            <summary class="link-button">管理员登录</summary>
+            <div class="login-popover">
+              <h2>管理员登录</h2>
+              <p>登录后进入 Dashboard 管理 API Key、租户和用量。</p>
+              ${loginMessage}
+              <form class="admin-form" id="admin-login-form">
+                <label>账号<input name="username" autocomplete="username" required /></label>
+                <label>密码<input name="password" type="password" autocomplete="current-password" required /></label>
+                <button class="primary-button" type="submit">登录</button>
+              </form>
+            </div>
+          </details>
+        `}
+      </div>
     </div>
   </header>
   <main class="wrap">
     <section class="hero">
       <div class="intro">
         <p class="subtle">EasyAI Platform</p>
-        <h1>统一的大模型网关、聊天入口和治理控制台</h1>
-        <p class="lead">这个项目把上游模型服务、OpenAI-compatible API、聊天界面、管理后台、批处理、缓存和审计能力放在同一个入口里，方便业务接入、管理员治理和开发者调试。</p>
-        <p class="lead" style="margin-top: 12px;">打开首页后，你可以先看清服务能力，再按角色进入聊天、管理或文档页面，不需要在多个服务之间来回找入口。</p>
+        <h1>统一入口：会话、管理和 API 文档</h1>
+        <p class="lead">EasyAI 提供 OpenAI-compatible 网关、本地模型接入、会话页、API Key 管理、租户治理、批处理和用量统计。</p>
+        <p class="lead" style="margin-top: 12px;">顶部导航集中提供会话页、API 文档和管理员登录入口；正文只保留平台能力与使用顺序。</p>
       </div>
-      <aside class="meta" aria-label="运行状态">
-        <dl>
-          <div><dt>服务端口</dt><dd>${cfg.port}</dd></div>
-          <div><dt>认证模式</dt><dd>${escapeHtml(authModes)}</dd></div>
-          <div><dt>缓存</dt><dd>${cfg.cacheEnabled ? "enabled" : "disabled"}</dd></div>
-          <div><dt>上游</dt><dd>${upstreams || "未配置"}</dd></div>
-        </dl>
-      </aside>
     </section>
 
     <section class="section" aria-labelledby="capabilities-title">
@@ -418,32 +385,8 @@ function buildHomeHtml(cfg: Config): string {
       </div>
     </section>
 
-    <section class="section" aria-labelledby="entry-title">
-      <h2 id="entry-title">常用入口</h2>
-      <p>下面这些地址覆盖了大部分日常操作和排障场景。</p>
-      <table class="matrix">
-        <thead>
-          <tr>
-            <th>入口</th>
-            <th>路径</th>
-            <th>用途</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${serviceRows.map(([name, pathValue, desc]) => `<tr><td>${escapeHtml(name)}</td><td><code>${escapeHtml(pathValue)}</code></td><td>${escapeHtml(desc)}</td></tr>`).join("")}
-        </tbody>
-      </table>
-    </section>
-
-    <nav class="grid" aria-label="页面导航">
-      ${cards.map((card) => `<a class="card" href="${card.href}">
-        <span class="label">${card.label}</span>
-        <h2>${card.title}</h2>
-        <p>${card.desc}</p>
-        <span class="go">打开 →</span>
-      </a>`).join("")}
-    </nav>
   </main>
+  ${isAdmin ? "" : `<script src="/admin/session.js"></script>`}
 </body>
 </html>`;
 }
@@ -458,6 +401,10 @@ function escapeHtml(value: string): string {
 }
 
 export async function registerDashboard(app: FastifyInstance, cfg: Config, db: Db): Promise<void> {
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, body, done) => {
+    done(null, body);
+  });
+
   app.addHook("onRequest", async (req, reply) => {
     const p = (req.url.split("?")[0] ?? req.url) as string;
     const needsAuth = p === "/dashboard" || p.startsWith("/dashboard/") || p.startsWith("/admin/api/");
@@ -465,19 +412,60 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
     if (!ipAllowed((req as any).ip, cfg.adminAllowedCidrs)) {
       return reply.status(403).send({ error: { message: "forbidden", type: "auth_error" } });
     }
-    const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+    const ok = isAdminRequest(req, cfg);
     if (ok) return;
-    reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
     if (p.startsWith("/admin/api/")) return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
-    return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    return reply.redirect("/?adminLogin=required");
   });
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  app.get("/", async (_req, reply) => {
+  app.get("/", async (req, reply) => {
     reply.type("text/html; charset=utf-8");
-    return reply.send(buildHomeHtml(cfg));
+    const loginState = String((req.query as any)?.adminLogin ?? "");
+    return reply.send(buildHomeHtml(cfg, isAdminRequest(req, cfg), loginState));
+  });
+
+  app.get("/admin/session.js", async (_req, reply) => {
+    reply.type("application/javascript; charset=utf-8");
+    return reply.send(`
+const form = document.getElementById("admin-login-form");
+if (form) {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const res = await fetch("/admin/session", {
+      method: "POST",
+      headers: { "content-type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({
+        username: String(data.get("username") || ""),
+        password: String(data.get("password") || "")
+      })
+    });
+    window.location.href = res.ok ? "/" : "/?adminLogin=failed";
+  });
+}
+`);
+  });
+
+  app.post("/admin/session", async (req, reply) => {
+    if (!ipAllowed((req as any).ip, cfg.adminAllowedCidrs)) {
+      return reply.status(403).send({ error: { message: "forbidden", type: "auth_error" } });
+    }
+    const body = (req.body ?? {}) as any;
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    if (username !== cfg.adminUser || password !== cfg.adminPass) {
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    }
+    reply.header("set-cookie", createAdminSessionCookie(cfg));
+    return { ok: true };
+  });
+
+  app.post("/admin/session/logout", async (_req, reply) => {
+    reply.header("set-cookie", clearAdminSessionCookie());
+    return reply.redirect("/", 303);
   });
 
   const dashboardRoot = path.resolve(__dirname, "../admin-ui/dist");
@@ -530,9 +518,8 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
   }
 
   app.get("/admin/api/usage", async (req, reply) => {
-    const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+    const ok = isAdminRequest(req, cfg);
     if (!ok) {
-      reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
 
@@ -542,9 +529,8 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
   });
 
   app.get("/admin/api/playground/models", async (req, reply) => {
-    const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+    const ok = isAdminRequest(req, cfg);
     if (!ok) {
-      reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const authHeaders = buildPlaygroundAuthHeaders(cfg);
@@ -569,9 +555,8 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
   });
 
   app.post("/admin/api/playground/chat", async (req, reply) => {
-    const ok = basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+    const ok = isAdminRequest(req, cfg);
     if (!ok || !requireAdminAction(req)) {
-      reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
     const authHeaders = buildPlaygroundAuthHeaders(cfg);

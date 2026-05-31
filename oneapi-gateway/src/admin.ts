@@ -17,22 +17,10 @@ import {
   upsertTenant,
 } from "./db.js";
 import type { RedisClient } from "./redis.js";
-import { ipAllowed } from "./net.js";
-
-function basicAuthOk(authHeader: string | undefined, user: string, pass: string): boolean {
-  if (!authHeader) return false;
-  const m = authHeader.match(/^Basic\s+(.+)$/i);
-  if (!m) return false;
-  const decoded = Buffer.from(m[1]!, "base64").toString("utf8");
-  const idx = decoded.indexOf(":");
-  if (idx < 0) return false;
-  const u = decoded.slice(0, idx);
-  const p = decoded.slice(idx + 1);
-  return u === user && p === pass;
-}
+import { isAdminRequest } from "./admin-auth.js";
 
 function requireAdmin(req: any, cfg: Config): boolean {
-  return ipAllowed(req.ip, cfg.adminAllowedCidrs) && basicAuthOk(req.headers.authorization, cfg.adminUser, cfg.adminPass);
+  return isAdminRequest(req, cfg);
 }
 
 function requireAdminAction(req: any): boolean {

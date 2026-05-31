@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { registerAdminApi } from "../src/admin.js";
+import { createAdminSessionCookie } from "../src/admin-auth.js";
 import type { Config } from "../src/config.js";
 
 function basic(u: string, p: string) {
@@ -77,4 +78,55 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
     headers: { authorization: basic("admin", "admin") },
   });
   assert.equal(r3.statusCode, 200);
+});
+
+test("admin api: accepts signed admin session cookie", async () => {
+  const cfg: Config = {
+    appEnv: "test",
+    port: 0,
+    logLevel: "info",
+    trustProxy: false,
+    adminUser: "admin",
+    adminPass: "admin",
+    authModes: new Set(["apikey"]),
+    apiKeys: new Set(["k1"]),
+    oauth: {},
+    upstreams: ["http://u"],
+    upstreamTimeoutMs: 1000,
+    rateLimitRpm: 120,
+    cacheEnabled: true,
+    cacheTtlSeconds: 60,
+    cacheReplayChunkDelayMs: 0,
+    cacheReplayMaxTotalMs: 0,
+    cacheReplayMode: "fixed",
+    guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
+    corsOrigin: "*", tls: undefined,
+    internalToken: "dev-internal",
+    redisUrl: "redis://x",
+    databaseUrl: "postgres://x",
+    modelMap: {},
+    fallbackMap: {},
+  };
+
+  const db: any = {
+    pool: {
+      query: async (sql: string) => {
+        if (sql.includes("select id, key_hash")) return { rows: [] };
+        throw new Error(`unexpected query: ${sql}`);
+      },
+    },
+    close: async () => {},
+  };
+  const redis: any = { set: async () => "OK", del: async () => 1 };
+
+  const app = Fastify({ logger: false });
+  await registerAdminApi(app, cfg, db, redis);
+
+  const r = await app.inject({
+    method: "GET",
+    url: "/admin/api/keys",
+    headers: { cookie: createAdminSessionCookie(cfg) },
+  });
+
+  assert.equal(r.statusCode, 200);
 });

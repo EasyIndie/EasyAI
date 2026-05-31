@@ -32,6 +32,14 @@ type TenantRow = {
   disabled: boolean;
 };
 
+type HealthStatus = {
+  ok: boolean;
+  service: string;
+  upstreams: string[];
+  authModes: string[];
+  cacheEnabled: boolean;
+};
+
 function formatTime(s: string) {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
@@ -281,6 +289,7 @@ export function App() {
   const [playgroundRaw, setPlaygroundRaw] = useState<string>("");
   const [playgroundUsage, setPlaygroundUsage] = useState<string>("");
   const [playgroundLatencyMs, setPlaygroundLatencyMs] = useState<number | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
 
   function stopPlayground() {
     const controller = playgroundAbortRef.current;
@@ -305,6 +314,17 @@ export function App() {
       setStatus("成功");
     } catch (e: any) {
       setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function loadHealth() {
+    try {
+      const res = await fetch("/healthz", { headers: { accept: "application/json" } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(String(res.status));
+      setHealth(data as HealthStatus);
+    } catch {
+      setHealth(null);
     }
   }
 
@@ -605,6 +625,7 @@ export function App() {
   }, [tab]);
 
   useEffect(() => {
+    loadHealth();
     return () => {
       playgroundAbortRef.current?.abort();
       playgroundAbortRef.current = null;
@@ -660,6 +681,29 @@ export function App() {
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", margin: 24 }}>
       <h1>OneAPI 管理台</h1>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: 12,
+        margin: "12px 0 18px",
+      }}>
+        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
+          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>网关状态</div>
+          <strong style={{ color: health?.ok ? "#137333" : "#999" }}>{health?.ok ? "Gateway online" : "Unknown"}</strong>
+        </div>
+        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
+          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>认证模式</div>
+          <strong>{health?.authModes?.join(", ") || "-"}</strong>
+        </div>
+        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
+          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>缓存</div>
+          <strong>{health ? (health.cacheEnabled ? "enabled" : "disabled") : "-"}</strong>
+        </div>
+        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
+          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>上游</div>
+          <strong style={{ wordBreak: "break-word" }}>{health?.upstreams?.join(", ") || "-"}</strong>
+        </div>
+      </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
         <button onClick={() => setTab("usage")} disabled={tab === "usage"}>
           用量统计
