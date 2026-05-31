@@ -8,11 +8,11 @@
 |---|---|---|---|---|
 | 网关入口 | `/v1/*` 统一入口、转发、模型重写 | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [deployment.md](./deployment.md) | `scripts/smoke-compose.sh` |
 | 首页导航 | `/` 集中导航到 Chat、Dashboard、Docs；OpenAPI JSON 从 `/docs` 突出进入 | [user-manual.md](./user-manual.md) | [deployment.md](./deployment.md) | curl `/` + `/docs` |
-| 认证 | API Key、OAuth(JWKS)、internal token | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [development.md](./development.md) | `oneapi-gateway/test/auth.test.ts` |
+| 认证 | API Key、internal token | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [development.md](./development.md) | `oneapi-gateway/test/auth.test.ts` |
 | 多租户治理 | tenant 绑定、tenant 配额、tenant 禁用 | [user-manual.md](./user-manual.md) | [operations.md](./operations.md) | `oneapi-gateway/test/admin.api.test.ts` |
 | 限流配额 | RPM（主体/租户）、TPM（租户） | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [operations.md](./operations.md) | `oneapi-gateway/test/rate_limit.test.ts` |
 | 缓存回放 | Redis 缓存、SSE 回放 fixed/original | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md), [operations.md](./operations.md) | `oneapi-gateway/test/cache.test.ts` |
-| 模型映射/回退 | `gateway.model_map`、`gateway.fallback_map` | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md) | `oneapi-gateway/test/proxy.integration.test.ts` |
+| 模型映射 | `models` | [user-manual.md](./user-manual.md) | [architecture.md](./architecture.md) | `litellm-service/test/test_config.py` |
 | Guardrails | 注入检测、内网 IP 拦截、PII 脱敏 | [user-manual.md](./user-manual.md) | [operations.md](./operations.md), [development.md](./development.md) | `oneapi-gateway/test/guardrails.test.ts` |
 | Batch | `/v1/batches` + worker 队列消费 | [user-manual.md](./user-manual.md) | [deployment.md](./deployment.md), [architecture.md](./architecture.md) | `oneapi-gateway/test/batch.api.test.ts` |
 | Dashboard/Admin API | `/dashboard` + `/admin/api/*` | [user-manual.md](./user-manual.md) | [operations.md](./operations.md) | `oneapi-gateway/test/dashboard.api.test.ts` |
@@ -23,18 +23,17 @@
 
 ## 2. 配置键映射（YAML-only）
 
-单一配置源：`config/oneapi/oneapi.yaml`（网关 + batch）。
+单一配置源：`config/easyai.yaml`（网关 + batch）。
 
 | 配置键 | 对应能力 | 相关文档 |
 |---|---|---|
-| `security.auth_modes`, `security.api_keys`, `security.oauth.*` | 鉴权策略 | [user-manual.md](./user-manual.md), [architecture.md](./architecture.md) |
-| `gateway.rate_limit_rpm` | 默认 RPM | [user-manual.md](./user-manual.md) |
-| `gateway.cache.*` | 缓存与回放 | [user-manual.md](./user-manual.md), [operations.md](./operations.md) |
-| `gateway.guardrails.*` | 安全防护 | [user-manual.md](./user-manual.md), [architecture.md](./architecture.md) |
-| `gateway.model_map`, `gateway.fallback_map` | 路由与回退 | [user-manual.md](./user-manual.md), [architecture.md](./architecture.md) |
-| `internal.token`, `internal.allow_cidrs` | 内部调用安全 | [deployment.md](./deployment.md), [operations.md](./operations.md) |
-| `batch_worker.*` | worker 行为 | [deployment.md](./deployment.md), [operations.md](./operations.md) |
-| `cors.*`, `tls.*` | 网关访问边界 | [deployment.md](./deployment.md) |
+| `app.*` | 运行环境、端口和日志级别 | [deployment.md](./deployment.md), [operations.md](./operations.md) |
+| `secrets.api_keys` | 鉴权策略 | [user-manual.md](./user-manual.md), [architecture.md](./architecture.md) |
+| `secrets.internal_token` | 内部调用安全 | [deployment.md](./deployment.md), [operations.md](./operations.md) |
+| `secrets.admin_password` | Dashboard 管理登录 | [user-manual.md](./user-manual.md) |
+| `secrets.postgres_password` | 数据库连接 | [deployment.md](./deployment.md) |
+| `providers.*` | 上游供应商 | [deployment.md](./deployment.md), [architecture.md](./architecture.md) |
+| `models.*` | 对外模型名 | [user-manual.md](./user-manual.md), [architecture.md](./architecture.md) |
 
 ## 3. 维护流程约定
 

@@ -9,16 +9,16 @@
 
 ## 快速启动 (完整模式, Docker)
 
-1. 启动服务（将自动加载 `config/oneapi/oneapi.yaml` 中的配置）：
+1. 启动服务（默认加载 [config/easyai.yaml](config/easyai.yaml)，不包含生产密钥）：
 
    ```bash
    docker compose up -d --build
    ```
 
-2. 调用网关（请使用 `config/oneapi/oneapi.yaml` 中 `security.api_keys` 配置的 Key）：
+2. 调用网关（请使用 `config/easyai.yaml` 中 `secrets.api_keys` 配置的 Key）：
 
    ```bash
-   curl http://localhost:3003/v1/chat/completions \
+   curl http://localhost:3004/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer <api-key>" \
      -d '{
@@ -28,9 +28,26 @@
      }'
    ```
 
+默认开发栈使用 Compose project `easyai-dev`、数据卷 `easyai_dev_*`、宿主机端口 `3004`。生产或团队部署时，不要把真实密钥写入入仓配置。复制一个本地 YAML，渲染 Compose override 后启动：
+
+```bash
+cp config/easyai.local.example.yaml config/easyai.local.yaml
+# 编辑 config/easyai.local.yaml，替换 REPLACE_WITH_* 后再生成 override
+python3 scripts/render-local-compose.py config/easyai.local.yaml > docker-compose.local.yml
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+生产栈使用 Compose project `easyai-prod`、数据卷 `easyai_prod_*`、宿主机端口 `3003`，与开发栈隔离。
+
+详见 [docs/yaml-secret-management.md](docs/yaml-secret-management.md)。
+
 ## 提供的服务
 
-- OneAPI 网关: `http://localhost:3003`
+- OneAPI 网关（开发）: `http://localhost:3004`
+- OneAPI 网关（生产 override）: `http://localhost:3003`
   - 首页导航: `/`
   - 健康检查: `/healthz`
   - 指标监控: `/metrics`
@@ -46,7 +63,7 @@
 
 ## 部署模式
 
-本项目仅保留完整模式：包含 OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker + Ollama，统一使用根目录的 `docker-compose.yml` 启动。
+本项目仅保留完整模式：包含 OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker + Ollama。开发使用根目录的 `docker-compose.yml`，生产使用 `docker-compose.yml + docker-compose.local.yml`。
 
 详情请参考部署文档。
 
@@ -56,6 +73,7 @@
 - [docs/user-manual.md](docs/user-manual.md)（产品使用手册 + 常用 API 速查）
 - [docs/deployment.md](docs/deployment.md)（部署：完整模式 / K8S）
 - [docs/operations.md](docs/operations.md)（运行手册：发布前检查 + 排障 + 一键清库）
+- [docs/yaml-secret-management.md](docs/yaml-secret-management.md)（YAML 配置与敏感信息管理）
 - [docs/local-model-benchmark.md](docs/local-model-benchmark.md)（本机模型实测报告：内存占用、耗时与模型对比）
 - [docs/development.md](docs/development.md)（开发/测试/安全基线/文档校验）
 - [docs/architecture.md](docs/architecture.md)（架构与请求流）

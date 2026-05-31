@@ -11,6 +11,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from pythonjsonlogger import jsonlogger
 
 import logging
+from pathlib import Path
 
 
 logger = logging.getLogger("litellm-service")
@@ -37,105 +38,80 @@ def _load_config(path: str) -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 def _validate_config(cfg: Dict[str, Any]) -> None:
-    service = cfg.get("service") or {}
-    if not isinstance(service, dict):
-        raise ValueError("service must be a map")
-    allowed = service.get("allowed_models") or []
-    if not isinstance(allowed, list) or any(not isinstance(x, str) or not x.strip() for x in allowed):
-        raise ValueError("service.allowed_models must be a list of strings when configured")
-    aliases = cfg.get("model_aliases") or {}
-    if not isinstance(aliases, dict) or not aliases:
-        raise ValueError("model_aliases must be a non-empty map")
-    for m in allowed:
-        if m not in aliases:
-            raise ValueError(f"allowed_models includes '{m}' but model_aliases has no such key")
-    for name, alias in aliases.items():
+    app_cfg = cfg.get("app") or {}
+    if not isinstance(app_cfg, dict):
+        raise ValueError("app must be a map")
+    env = str(app_cfg.get("env") or "development").lower()
+    models = cfg.get("models") or {}
+    if not isinstance(models, dict) or not models:
+        raise ValueError("models must be a non-empty map")
+    for name, alias in models.items():
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("model_aliases keys must be non-empty strings")
+            raise ValueError("models keys must be non-empty strings")
         if not isinstance(alias, dict):
-            raise ValueError(f"model_aliases['{name}'] must be a map")
-        backends = alias.get("backends")
-        if isinstance(backends, list):
-            if not backends:
-                raise ValueError(f"model_aliases['{name}'].backends must not be empty")
-            for b in backends:
-                if not isinstance(b, dict):
-                    raise ValueError(f"model_aliases['{name}'].backends items must be maps")
-                if not b.get("provider") or not b.get("model"):
-                    raise ValueError(f"backend for '{name}' must include provider and model")
-            continue
+            raise ValueError(f"models['{name}'] must be a map")
         provider = alias.get("provider")
         model = alias.get("model")
         if not provider or not model:
-            raise ValueError(f"model_aliases['{name}'] must include provider and model (or backends)")
+            raise ValueError(f"models['{name}'] must include provider and model")
+    if env == "production":
+        providers = cfg.get("providers") or {}
+        if not isinstance(providers, dict):
+            raise ValueError("providers must be a map")
+        placeholders = {"", "change-me", "changeme", "replace-me"}
+        referenced_providers = {str(alias.get("provider")) for alias in models.values() if isinstance(alias, dict) and alias.get("provider")}
+        for provider_name in referenced_providers:
+            if provider_name == "ollama":
+                continue
+            provider_cfg = providers.get(provider_name) or {}
+            if not isinstance(provider_cfg, dict):
+                provider_cfg = {}
+            api_key = provider_cfg.get("api_key")
+            api_key_value = str(api_key).strip().lower()
+            if api_key is None or api_key_value in placeholders or api_key_value.startswith("replace_with_"):
+                raise ValueError(f"providers.{provider_name}.api_key must not be a placeholder in production")
 
 
-CONFIG_PATH = "/app/config/litellm.yaml"
+def _resolve_config_path(path: str) -> str:
+    if Path(path).exists():
+        return path
+    for fallback in (Path("config/easyai.yaml"), Path("../config/easyai.yaml")):
+        if fallback.exists():
+            return str(fallback)
+    return path
+
+
+CONFIG_PATH = _resolve_config_path("/app/config/easyai.yaml")
 CONFIG = _load_config(CONFIG_PATH)
 _validate_config(CONFIG)
-logger.setLevel(str((CONFIG.get("service") or {}).get("log_level", "info")).upper())
+logger.setLevel(str((CONFIG.get("app") or {}).get("log_level", "info")).upper())
 
 
-_RR_COUNTERS: Dict[str, int] = {}
+def _provider_config(provider: str) -> dict:
+    providers = CONFIG.get("providers") or {}
+    cfg = providers.get(provider) or {}
+    return cfg if isinstance(cfg, dict) else {}
 
 
-def _pick_backend(input_model: str, backends: list[dict], selection: Optional[str], selector_key: Optional[str]) -> dict:
-    if not backends:
-        raise ValueError(f"no backends configured for model: {input_model}")
-    if len(backends) == 1:
-        return backends[0]
-    strategy = (selection or "hash").lower()
-    if strategy == "round_robin":
-        idx = _RR_COUNTERS.get(input_model, 0)
-        _RR_COUNTERS[input_model] = idx + 1
-        return backends[idx % len(backends)]
-    key = selector_key or str(time.time_ns())
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    idx = int(digest, 16) % len(backends)
-    return backends[idx]
-
-
-def _resolve_backend(backend: dict) -> Tuple[str, Optional[str]]:
-    provider = backend.get("provider")
-    model = backend.get("model")
-    api_base = backend.get("api_base")
-    if not provider or not model:
-        raise ValueError("backend must include provider and model")
-    if provider == "ollama":
-        if not api_base:
-            provider_cfg = (CONFIG.get("providers", {}).get("ollama", {}) or {})
-            api_base = provider_cfg.get("api_base")
-        if not api_base:
-            raise ValueError("providers.ollama.api_base is required for ollama provider")
-        return f"ollama/{model}", api_base
-    return f"{provider}/{model}", api_base
-
-
-def _resolve_model(input_model: str, selector_key: Optional[str] = None) -> Tuple[str, Optional[str]]:
-    aliases = (CONFIG.get("model_aliases") or {})
+def _resolve_model(input_model: str, selector_key: Optional[str] = None) -> Tuple[str, Optional[str], Optional[str]]:
+    aliases = (CONFIG.get("models") or {})
     if input_model in aliases:
         alias = aliases[input_model] or {}
-        backends = alias.get("backends")
-        if isinstance(backends, list):
-            backend = _pick_backend(input_model, backends, alias.get("selection"), selector_key)
-            return _resolve_backend(backend)
         provider = alias.get("provider")
         model = alias.get("model")
+        provider_cfg = _provider_config(str(provider))
+        api_base = alias.get("api_base") or provider_cfg.get("api_base")
+        api_key = alias.get("api_key") or provider_cfg.get("api_key")
         if provider == "ollama":
-            provider_cfg = (CONFIG.get("providers", {}).get("ollama", {}) or {})
-            api_base = provider_cfg.get("api_base")
             if not api_base:
                 raise ValueError("providers.ollama.api_base is required for ollama provider")
-            return f"ollama/{model}", api_base
-        return f"{provider}/{model}", None
-    return input_model, None
+            return f"ollama/{model}", api_base, None
+        return f"{provider}/{model}", api_base, api_key
+    return input_model, None, None
 
 
-def _allowed_models() -> list[str]:
-    allowed = (CONFIG.get("service") or {}).get("allowed_models")
-    if allowed:
-        return list(allowed)
-    return list((CONFIG.get("model_aliases") or {}).keys())
+def _models() -> list[str]:
+    return list((CONFIG.get("models") or {}).keys())
 
 
 app = FastAPI(title="LiteLLM Service", version="0.1.0")
@@ -161,7 +137,7 @@ async def healthz():
     return {
         "ok": True,
         "service": "litellm-service",
-        "allowed_models": _allowed_models(),
+        "models": _models(),
     }
 
 
@@ -172,11 +148,11 @@ async def metrics():
 
 @app.get("/v1/models")
 async def list_models():
-    return {"object": "list", "data": [{"id": m, "object": "model"} for m in _allowed_models()]}
+    return {"object": "list", "data": [{"id": m, "object": "model"} for m in _models()]}
 
 
 def _validate_model(model: str):
-    allowed = set(_allowed_models())
+    allowed = set(_models())
     if allowed and model not in allowed:
         return JSONResponse(status_code=400, content={"error": {"message": "model not allowed", "type": "invalid_request_error"}})
     return None
@@ -238,16 +214,18 @@ async def chat_completions(body: Dict[str, Any] = Body(...), background_tasks: B
     if err_resp: return err_resp
 
     selector_key = _stable_hash({"m": model, "p": {k: body.get(k) for k in ("messages", "temperature", "top_p", "max_tokens")}})
-    resolved_model, api_base = _resolve_model(model, selector_key)
+    resolved_model, api_base, api_key = _resolve_model(model, selector_key)
     params = dict(body)
     params["model"] = resolved_model
     if api_base:
         params["api_base"] = api_base
+    if api_key:
+        params["api_key"] = api_key
     extra_headers: Dict[str, str] = {}
     if api_base:
         extra_headers["X-Backend-Base"] = str(api_base)
 
-    timeout_ms = int(((CONFIG.get("service") or {}).get("default_timeout_ms") or 20000))
+    timeout_ms = int(((CONFIG.get("app") or {}).get("default_timeout_ms") or 120000))
     params.setdefault("timeout", timeout_ms / 1000.0)
 
     req_id = selector_key
@@ -345,16 +323,18 @@ async def embeddings(body: Dict[str, Any] = Body(...), background_tasks: Backgro
     if err_resp: return err_resp
 
     selector_key = _stable_hash({"m": model, "p": {k: body.get(k) for k in ("input", "encoding_format")}})
-    resolved_model, api_base = _resolve_model(model, selector_key)
+    resolved_model, api_base, api_key = _resolve_model(model, selector_key)
     params = dict(body)
     params["model"] = resolved_model
     if api_base:
         params["api_base"] = api_base
+    if api_key:
+        params["api_key"] = api_key
     extra_headers: Dict[str, str] = {}
     if api_base:
         extra_headers["X-Backend-Base"] = str(api_base)
 
-    timeout_ms = int(((CONFIG.get("service") or {}).get("default_timeout_ms") or 20000))
+    timeout_ms = int(((CONFIG.get("app") or {}).get("default_timeout_ms") or 120000))
     params.setdefault("timeout", timeout_ms / 1000.0)
 
     req_id = selector_key

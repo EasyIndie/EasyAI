@@ -1,0 +1,31 @@
+app:
+  env: "production"
+  port: 3003
+  log_level: "info"
+
+secrets:
+  admin_password: "REPLACE_WITH_STRONG_ADMIN_PASSWORD"
+  api_keys:
+    - "REPLACE_WITH_CLIENT_API_KEY"
+  internal_token: "REPLACE_WITH_INTERNAL_TOKEN"
+  postgres_password: "REPLACE_WITH_POSTGRES_PASSWORD"
+
+providers:
+  openai:
+    api_key: "REPLACE_WITH_OPENAI_API_KEY"
+  deepseek:
+    api_base: "https://api.deepseek.com/v1"
+    api_key: "REPLACE_WITH_DEEPSEEK_API_KEY"
+  ollama:
+    api_base: "http://ollama:11434"
+
+models:
+  chat:
+    provider: deepseek
+    model: deepseek-chat
+  reasoner:
+    provider: deepseek
+    model: deepseek-reasoner
+  gpt:
+    provider: openai
+    model: gpt-4o-mini

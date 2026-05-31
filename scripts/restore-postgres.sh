@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-compose_file="$root/docker-compose.yml"
+compose_file="${COMPOSE_FILE:-$root/docker-compose.yml}"
 
 usage() {
   cat <<'EOF'
@@ -34,19 +34,25 @@ if [[ "$assume_yes" != "--yes" ]]; then
   exit 1
 fi
 
+compose_args=()
+IFS=':' read -r -a compose_files <<< "$compose_file"
+for f in "${compose_files[@]}"; do
+  compose_args+=("-f" "$f")
+done
+
 echo "[1/4] 停止 oneapi 和 batch_worker ..."
-docker compose -f "$compose_file" stop oneapi batch_worker >/dev/null
+docker compose "${compose_args[@]}" stop oneapi batch_worker >/dev/null
 
 echo "[2/4] 重建 public schema ..."
-docker compose -f "$compose_file" exec -T postgres \
+docker compose "${compose_args[@]}" exec -T postgres \
   psql -U oneapi -d oneapi -v ON_ERROR_STOP=1 \
   -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO oneapi;' >/dev/null
 
 echo "[3/4] 恢复备份 ..."
-docker compose -f "$compose_file" exec -T postgres \
+docker compose "${compose_args[@]}" exec -T postgres \
   pg_restore -U oneapi -d oneapi --no-owner --role=oneapi < "$backup"
 
 echo "[4/4] 启动 oneapi 和 batch_worker ..."
-docker compose -f "$compose_file" start oneapi batch_worker >/dev/null
+docker compose "${compose_args[@]}" start oneapi batch_worker >/dev/null
 
 echo "完成: $backup"

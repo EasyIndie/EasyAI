@@ -73,10 +73,9 @@ docker compose build batch_worker
 
 ### 4.1 生产配置基线
 
-- 生产环境请在 `oneapi.yaml` 中设置 `server.env: "production"`，并确保不会使用默认示例值（例如 `admin:admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
-- 如启用 Batch/内部调用鉴权（`internal.token`），默认会将 internal token 请求来源限制在私网/本机 CIDR（可用 `internal.allow_cidrs` 覆盖，或设置为 `any` 关闭限制）。
-- 如果网关部署在反向代理/Ingress/LB 后，需要按实际链路设置 `server.trust_proxy: true`（可选配置跳数），以便基于真实客户端 IP 执行 internal token 的 CIDR 限制。
-- 生产环境建议启用 Guardrails（`gateway.guardrails.enabled: true`）并配置 TLS。
+- 生产环境请在 `config/easyai.yaml` 中设置 `app.env: "production"`，并确保不会使用默认示例值（例如 `admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
+- 如启用 Batch/内部调用鉴权（`secrets.internal_token`），默认会将 internal token 请求来源限制在私网/本机 CIDR。
+- 生产环境建议在前置反向代理或负载均衡层配置 TLS。
 
 ### 4.2 依赖扫描
 
@@ -98,11 +97,11 @@ trivy image easyai/batch-worker:latest
 ```bash
 docker run --rm --network host -t ghcr.io/zaproxy/zaproxy:stable \
   zap-baseline.py \
-  -t http://localhost:3003/ \
+  -t http://localhost:3004/ \
   -r zap-report.html
 ```
 
-在 Docker Desktop（macOS/Windows）上，`--network host` 行为与 Linux 不同；可改扫 `http://host.docker.internal:3003/` 或直接在宿主机运行扫描。
+在 Docker Desktop（macOS/Windows）上，`--network host` 行为与 Linux 不同；可改扫 `http://host.docker.internal:3004/` 或直接在宿主机运行扫描。
 
 ## 5. 文档一致性校验（Doc Audit）
 

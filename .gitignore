@@ -4,6 +4,10 @@
 .env
 .env.*
 !.env.example
+docker-compose.local.yml
+config/**/*.local.yaml
+config/**/*.secret.yaml
+config/secrets/
 
 # Logs
 *.log

@@ -1,4 +1,6 @@
-x-postgres-password: &postgres_password "KVhkORQ+sPToe4lX4cGp5gbmmUMoxfw7YYHys4jUezk="
+name: easyai-dev
+
+x-postgres-password: &postgres_password "oneapi"
 
 services:
   redis:
@@ -26,7 +28,7 @@ services:
       context: ./litellm-service
     restart: unless-stopped
     volumes:
-      - ./config/litellm/litellm.yaml:/app/config/litellm.yaml
+      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - ollama
 
@@ -35,9 +37,9 @@ services:
       context: ./oneapi-gateway
     restart: unless-stopped
     ports:
-      - "3003:3003"
+      - "3004:3003"
     volumes:
-      - ./config/oneapi/oneapi.yaml:/app/config/oneapi.yaml
+      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - redis
       - postgres
@@ -48,7 +50,7 @@ services:
       context: ./batch-worker
     restart: unless-stopped
     volumes:
-      - ./config/oneapi/oneapi.yaml:/app/config/oneapi.yaml
+      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - redis
       - postgres
@@ -56,4 +58,6 @@ services:
 
 volumes:
   postgres_data:
+    name: easyai_dev_postgres_data
   ollama_data:
+    name: easyai_dev_ollama_data

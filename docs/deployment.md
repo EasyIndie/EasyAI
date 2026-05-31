@@ -8,11 +8,23 @@
 
 ### 1.1 Docker Compose
 
-首次对外提供服务前，请直接检查并替换 YAML 中的敏感值：
-- [config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)：`security.admin.password`、`security.api_keys`、`internal.token`、`database.password`
-- [docker-compose.yml](../docker-compose.yml)：`POSTGRES_PASSWORD`
+开发启动直接使用入仓的 [config/easyai.yaml](../config/easyai.yaml)，Compose project 为 `easyai-dev`，数据卷为 `easyai_dev_*`，宿主机端口为 `3004`。生产或团队部署时，先创建本地配置并生成 Compose override：
 
-在仓库根目录直接运行：
+```bash
+cp config/easyai.local.example.yaml config/easyai.local.yaml
+# 编辑 config/easyai.local.yaml，替换 REPLACE_WITH_* 后再生成 override
+python3 scripts/render-local-compose.py config/easyai.local.yaml > docker-compose.local.yml
+```
+
+然后运行：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+生产 override 使用 Compose project `easyai-prod`，数据卷为 `easyai_prod_*`，宿主机端口为 `3003`。开发和生产可以在同一台机器上共存，不共享容器、网络或数据卷。
+
+开发环境可直接运行：
 
 ```bash
 docker compose up -d --build
@@ -23,7 +35,8 @@ docker compose up -d --build
 验证网关与代理层是否正常启动：
 
 ```bash
-curl -sS http://localhost:3003/healthz
+curl -sS http://localhost:3004/healthz   # 开发
+curl -sS http://localhost:3003/healthz   # 生产 override
 docker compose exec -T litellm python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
 ```
 
@@ -33,15 +46,16 @@ docker compose exec -T litellm python -c "import urllib.request; print(urllib.re
 - 本次部署暂未包含 TLS 和反向代理；公网开放时请只放通 OneAPI 端口，并在前置网络层限制管理端来源。
 
 管理后台：
-- 首页导航：`http://localhost:3003/`
-- Dashboard：`http://localhost:3003/dashboard`
-- 内置聊天界面：`http://localhost:3003/chat`
-- Swagger API 文档：`http://localhost:3003/docs`
+- 开发首页导航：`http://localhost:3004/`
+- 生产首页导航：`http://localhost:3003/`
+- Dashboard：`/dashboard`
+- 内置聊天界面：`/chat`
+- Swagger API 文档：`/docs`
 
 通过网关发起一次测试请求：
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <api-key>" \
   -d '{
@@ -53,26 +67,23 @@ curl -sS http://localhost:3003/v1/chat/completions \
 
 ### 1.2 Batch 异步任务服务
 
-- 默认在完整模式中已启用：`config/oneapi/oneapi.yaml` 包含 `internal.token` 且 compose 会自动启动 `batch_worker` 容器。
-- 若需关闭 Batch 功能：清空 YAML 配置中的 `internal.token`，并在 compose 中移除/停止 `batch_worker`。未配置 token 时访问 `/v1/batches` 会返回 503 错误。
+- 默认在完整模式中已启用：`config/easyai.yaml` 包含 `secrets.internal_token` 且 compose 会自动启动 `batch_worker` 容器。
+- 若需关闭 Batch 功能：清空 YAML 配置中的 `secrets.internal_token`，并在 compose 中移除/停止 `batch_worker`。未配置 token 时访问 `/v1/batches` 会返回 503 错误。
 
 ---
 
 ## 2. 配置文件入口
 
-系统的主要行为通过以下 YAML 文件集中控制，不依赖 `.env` 或运行时环境变量注入：
+系统的主要行为通过一个 YAML 文件集中控制，不依赖 `.env` 或运行时环境变量注入：
 
-- **OneAPI 网关配置**：[config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
-- **LiteLLM 代理配置**：[config/litellm/litellm.yaml](../config/litellm/litellm.yaml)
+- **统一配置**：[config/easyai.yaml](../config/easyai.yaml)
 
 ### 2.1 生产安全开关
 
-- `server.env: production` 时会拒绝默认管理密码、`dev-key`、`dev-internal` 和默认数据库密码。
-- `security.admin.allowed_cidrs` 控制 Dashboard 和 `/admin/api/*` 的来源 IP。
-- `security.metrics_allowed_cidrs` 控制 `/metrics` 的来源 IP。
-- `server.body_limit` 控制请求体上限，默认 `10mb`。
-- `security.security_headers: true` 会开启基础安全响应头。
-- 默认仅启用 API Key；如需 OAuth，请在 `security.auth_modes` 中打开 `oauth` 并配置 `security.oauth.jwks_url`、`audience`、`issuer`。
+- `app.env: production` 时会拒绝默认管理密码、`dev-key`、`dev-internal` 和默认数据库密码。
+- `secrets.admin_password`、`secrets.api_keys`、`secrets.internal_token`、`secrets.postgres_password` 是生产部署必须替换的敏感值。
+- `models` 下的键就是客户端请求时使用的模型名。
+- `providers` 配置 OpenAI、DeepSeek、Ollama 等上游凭据和地址。
 
 ### 2.2 备份恢复
 
@@ -82,8 +93,20 @@ curl -sS http://localhost:3003/v1/chat/completions \
 ./scripts/backup-postgres.sh
 ```
 
+生产 override 备份请显式指定 Compose 文件，避免误备份开发库：
+
+```bash
+COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/backup-postgres.sh
+```
+
 恢复：
 
 ```bash
 ./scripts/restore-postgres.sh backups/postgres/oneapi_YYYYmmdd_HHMMSS.dump --yes
+```
+
+生产 override 恢复同样需要显式指定：
+
+```bash
+COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/restore-postgres.sh backups/postgres/oneapi_YYYYmmdd_HHMMSS.dump --yes
 ```

@@ -67,18 +67,50 @@ function arr(value: unknown, fallback: string[] = []): string[] {
   return Array.isArray(value) ? value.map((v) => String(v).trim()).filter(Boolean) : fallback;
 }
 
-function buildPostgresUrl(database: any, fallback: string): string {
-  if (!database || typeof database !== "object" || Object.keys(database).length === 0) return fallback;
-  if (database.url) return String(database.url);
-  const host = String(database.host ?? "localhost");
-  const port = Number(database.port ?? 5432);
-  const user = String(database.user ?? "oneapi");
-  const password = String(database.password ?? "oneapi");
-  const name = String(database.name ?? "oneapi");
+function buildPostgresUrl(password: string): string {
+  const host = "postgres";
+  const port = 5432;
+  const user = "oneapi";
+  const name = "oneapi";
   return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(name)}`;
 }
 
-export function loadConfig(configPath = "/app/config/oneapi.yaml"): Config {
+function isPlaceholderSecret(value: unknown): boolean {
+  const s = String(value ?? "").trim().toLowerCase();
+  return (
+    !s ||
+    ["admin", "dev-key", "dev-internal", "oneapi", "change-me", "changeme", "replace-me"].includes(s) ||
+    s.startsWith("replace_with_")
+  );
+}
+
+function assertNoPlaceholderSecrets(opts: {
+  adminPass: string;
+  apiKeys: Set<string>;
+  internalToken?: string;
+  databaseUrl: string;
+}): void {
+  if (isPlaceholderSecret(opts.adminPass)) throw new Error(`Refusing to start with placeholder admin password in production`);
+  for (const key of opts.apiKeys) {
+    if (isPlaceholderSecret(key)) throw new Error(`Refusing to start with placeholder api key in production`);
+  }
+  if (opts.internalToken && isPlaceholderSecret(opts.internalToken)) {
+    throw new Error(`Refusing to start with placeholder internal token in production`);
+  }
+  if (opts.databaseUrl.includes("oneapi:oneapi@")) {
+    throw new Error(`Refusing to start with default database password in production`);
+  }
+}
+
+function resolveConfigPath(configPath: string): string {
+  if (fs.existsSync(configPath)) return configPath;
+  if (fs.existsSync("../config/easyai.yaml")) return "../config/easyai.yaml";
+  if (fs.existsSync("config/easyai.yaml")) return "config/easyai.yaml";
+  return configPath;
+}
+
+export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
+  configPath = resolveConfigPath(configPath);
   if (!fs.existsSync(configPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
@@ -90,74 +122,60 @@ export function loadConfig(configPath = "/app/config/oneapi.yaml"): Config {
     throw new Error("Invalid YAML configuration");
   }
 
-  const server = parsed.server || {};
-  const security = parsed.security || {};
-  const admin = security.admin || {};
-  const internal = parsed.internal || security.internal || {};
-  const gateway = parsed.gateway || {};
-  const database = parsed.database || {};
+  const app = parsed.app || {};
+  const secrets = parsed.secrets || {};
 
-  const appEnv = server.env || parsed.app_env || "development";
-  const port = Number(server.port ?? parsed.port ?? 3003);
-  const bodyLimitBytes = parseBytes(server.body_limit_bytes ?? server.body_limit ?? parsed.body_limit_bytes ?? parsed.body_limit, 10 * 1024 * 1024);
-  const logLevel = server.log_level ?? parsed.log_level ?? "info";
-  const trustProxy = server.trust_proxy ?? parsed.trust_proxy ?? false;
+  const appEnv = app.env || "development";
+  const port = Number(app.port ?? 3003);
+  const bodyLimitBytes = parseBytes(app.body_limit, 10 * 1024 * 1024);
+  const logLevel = app.log_level ?? "info";
+  const trustProxy = app.trust_proxy ?? false;
 
-  const adminUser = String(admin.user ?? parsed.admin_user ?? "admin").trim();
-  const adminPass = String(admin.password ?? parsed.admin_pass ?? "admin").trim();
-  const adminAllowedCidrs = parseCidrAllowList(admin.allowed_cidrs ?? parsed.admin_allowed_cidrs, appEnv === "production" ? PRIVATE_CIDRS : undefined);
-  const metricsAllowedCidrs = parseCidrAllowList(security.metrics_allowed_cidrs ?? parsed.metrics_allowed_cidrs, appEnv === "production" ? PRIVATE_CIDRS : undefined);
-  const securityHeadersEnabled = security.security_headers ?? security.headers?.enabled ?? parsed.security_headers?.enabled ?? appEnv !== "development";
+  const adminUser = "admin";
+  const adminPass = String(secrets.admin_password ?? "").trim();
+  const adminAllowedCidrs = parseCidrAllowList(undefined, appEnv === "production" ? PRIVATE_CIDRS : undefined);
+  const metricsAllowedCidrs = parseCidrAllowList(undefined, appEnv === "production" ? PRIVATE_CIDRS : undefined);
+  const securityHeadersEnabled = appEnv !== "development";
 
-  const authModesArr = Array.isArray(security.auth_modes) ? security.auth_modes : Array.isArray(parsed.auth_modes) ? parsed.auth_modes : ["apikey"];
-  const authModes = new Set<AuthMode>(authModesArr.map((s: string) => s.trim()).filter(Boolean));
+  const authModes = new Set<AuthMode>(["apikey"]);
 
-  const apiKeysArr = Array.isArray(security.api_keys) ? security.api_keys : Array.isArray(parsed.api_keys) ? parsed.api_keys : [];
+  const apiKeysArr = Array.isArray(secrets.api_keys) ? secrets.api_keys : [];
   const apiKeys = new Set<string>(apiKeysArr.map((s: string) => s.trim()).filter(Boolean));
 
-  const oauth = security.oauth || parsed.oauth || {};
+  const oauth = {};
 
-  const upstreams = arr(gateway.upstreams ?? parsed.upstreams, ["http://localhost:4000"]);
-  const upstreamTimeoutMs = Number(gateway.upstream_timeout_ms ?? parsed.upstream_timeout_ms ?? 60000);
+  const upstreams = ["http://litellm:4000"];
+  const upstreamTimeoutMs = 60000;
   
-  const rateLimitRpm = Number(gateway.rate_limit_rpm ?? parsed.rate_limit_rpm ?? 120);
+  const rateLimitRpm = 120;
   
-  const cache = gateway.cache || parsed.cache || {};
-  const cacheEnabled = cache.enabled ?? true;
-  const cacheTtlSeconds = Number(cache.ttl_seconds ?? 60);
-  const cacheReplayChunkDelayMs = Number(cache.replay_chunk_delay_ms ?? 0);
-  const cacheReplayMaxTotalMs = Number(cache.replay_max_total_ms ?? 0);
-  const cacheReplayMode = (cache.replay_mode === "original" ? "original" : "fixed");
+  const cacheEnabled = true;
+  const cacheTtlSeconds = 60;
+  const cacheReplayChunkDelayMs = 35;
+  const cacheReplayMaxTotalMs = 10000;
+  const cacheReplayMode = "original";
 
-  const guardrails = gateway.guardrails || parsed.guardrails || {};
-  const guardEnabled = guardrails.enabled ?? false;
-  const guardBlockInternalIp = guardrails.block_internal_ip ?? true;
-  const guardPiiMaskEnabled = guardrails.pii_mask_enabled ?? true;
-  const injectionKeywords = Array.isArray(guardrails.injection_keywords) ? guardrails.injection_keywords : [];
+  const guardEnabled = true;
+  const guardBlockInternalIp = true;
+  const guardPiiMaskEnabled = false;
+  const injectionKeywords = ["ignore all previous instructions", "system prompt", "developer message", "jailbreak"];
 
-  const corsOrigin = security.cors_origins ?? parsed.cors?.origin ?? "*";
+  const corsOrigin = "*";
 
-  const tlsConfig = security.tls || parsed.tls || {};
-  const tls = (tlsConfig.cert_path && tlsConfig.key_path)
-    ? { certPath: String(tlsConfig.cert_path), keyPath: String(tlsConfig.key_path) }
-    : undefined;
+  const tls = undefined;
 
-  const internalToken = internal.token ?? parsed.internal_token;
+  const internalToken = secrets.internal_token;
   let internalTokenAllowCidrs: string[] | null | undefined = undefined;
-  if (internalToken) internalTokenAllowCidrs = parseCidrAllowList(internal.allow_cidrs ?? parsed.internal_token_allow_cidrs, PRIVATE_CIDRS);
+  if (internalToken) internalTokenAllowCidrs = parseCidrAllowList(undefined, PRIVATE_CIDRS);
 
-  const redisUrl = database.redis_url ?? parsed.redis_url ?? "redis://localhost:6379";
-  const databaseUrl = buildPostgresUrl(database, parsed.database_url ?? "postgres://oneapi:oneapi@localhost:5432/oneapi");
+  const redisUrl = "redis://redis:6379";
+  const databaseUrl = buildPostgresUrl(String(secrets.postgres_password ?? "oneapi"));
 
-  const modelMap = gateway.model_map || parsed.model_map || {};
-  const fallbackMap = gateway.fallback_map || parsed.fallback_map || {};
+  const modelMap = {};
+  const fallbackMap = {};
 
   if (appEnv === "production") {
-    if (adminUser === "admin" && adminPass === "admin") throw new Error(`Refusing to start with default admin credentials in production`);
-    if (apiKeys.has("dev-key")) throw new Error(`Refusing to start with api_keys containing "dev-key" in production`);
-    if (internalToken === "dev-internal") throw new Error(`Refusing to start with internal_token="dev-internal" in production`);
-    if (databaseUrl.includes("oneapi:oneapi@")) throw new Error(`Refusing to start with default database password in production`);
-    if (authModes.has("oauth") && !oauth.jwks_url) throw new Error(`oauth.jwks_url is required when auth_modes includes oauth`);
+    assertNoPlaceholderSecrets({ adminPass, apiKeys, internalToken, databaseUrl });
   }
 
   return {
@@ -174,9 +192,9 @@ export function loadConfig(configPath = "/app/config/oneapi.yaml"): Config {
     authModes,
     apiKeys,
     oauth: {
-      jwksUrl: oauth.jwks_url || undefined,
-      audience: oauth.audience || undefined,
-      issuer: oauth.issuer || undefined,
+      jwksUrl: undefined,
+      audience: undefined,
+      issuer: undefined,
     },
     upstreams,
     upstreamTimeoutMs,

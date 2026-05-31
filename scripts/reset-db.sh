@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-compose_file="$root/docker-compose.yml"
+compose_file="${COMPOSE_FILE:-$root/docker-compose.yml}"
 
 mode="app"
 with_redis="false"
@@ -69,7 +69,13 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! docker compose -f "$compose_file" ps postgres >/dev/null 2>&1; then
+compose_args=()
+IFS=':' read -r -a compose_files <<< "$compose_file"
+for f in "${compose_files[@]}"; do
+  compose_args+=("-f" "$f")
+done
+
+if ! docker compose "${compose_args[@]}" ps postgres >/dev/null 2>&1; then
   echo "未检测到 compose 项目，请先在项目根目录执行 docker compose up -d。" >&2
   exit 1
 fi
@@ -98,20 +104,20 @@ if [[ "$assume_yes" != "true" ]]; then
 fi
 
 echo "[1/4] 停止 oneapi 和 batch_worker ..."
-docker compose -f "$compose_file" stop oneapi batch_worker >/dev/null
+docker compose "${compose_args[@]}" stop oneapi batch_worker >/dev/null
 
 echo "[2/4] 清空 Postgres 数据 ..."
-docker compose -f "$compose_file" exec -T postgres \
+docker compose "${compose_args[@]}" exec -T postgres \
   psql -U oneapi -d oneapi -v ON_ERROR_STOP=1 -c "$sql" >/dev/null
 
 if [[ "$with_redis" == "true" ]]; then
   echo "[3/4] 清空 Redis ..."
-  docker compose -f "$compose_file" exec -T redis redis-cli FLUSHALL >/dev/null
+  docker compose "${compose_args[@]}" exec -T redis redis-cli FLUSHALL >/dev/null
 else
   echo "[3/4] 跳过 Redis 清理"
 fi
 
 echo "[4/4] 启动 oneapi 和 batch_worker ..."
-docker compose -f "$compose_file" start oneapi batch_worker >/dev/null
+docker compose "${compose_args[@]}" start oneapi batch_worker >/dev/null
 
 echo "完成: $summary"

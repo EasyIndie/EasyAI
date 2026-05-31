@@ -8,7 +8,7 @@
 - 设备：`MacBook Pro (Apple M4 Pro, 48 GB 内存)`
 - Docker Desktop 可用内存：`16 GB`
 - 运行方式：`docker compose + Ollama + LiteLLM`
-- 模型来源：`config/litellm/litellm.yaml`
+- 模型来源：`config/easyai.yaml`
 
 ## 2. 测试方法
 

@@ -1,0 +1,25 @@
+app:
+  env: "development"
+  port: 3003
+  log_level: "info"
+
+secrets:
+  admin_password: "admin"
+  api_keys:
+    - "dev-key"
+  internal_token: "dev-internal"
+  postgres_password: "oneapi"
+
+providers:
+  ollama:
+    api_base: "http://ollama:11434"
+  openai:
+    api_key: ""
+  deepseek:
+    api_base: "https://api.deepseek.com/v1"
+    api_key: ""
+
+models:
+  chat:
+    provider: ollama
+    model: qwen2.5:0.5b

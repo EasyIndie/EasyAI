@@ -17,7 +17,7 @@ type BatchItemRow = {
 };
 
 function loadConfig() {
-  const configPath = "/app/config/oneapi.yaml";
+  const configPath = resolveConfigPath("/app/config/easyai.yaml");
   if (!fs.existsSync(configPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
@@ -27,22 +27,23 @@ function loadConfig() {
     throw new Error("Invalid YAML configuration");
   }
   
-  const database = parsed.database || {};
-  const internal = parsed.internal || parsed.security?.internal || {};
-  const redisUrl = database.redis_url ?? parsed.redis_url ?? "redis://localhost:6379";
-  const databaseUrl = database.url ?? (
-    database.host
-      ? `postgres://${encodeURIComponent(String(database.user ?? "oneapi"))}:${encodeURIComponent(String(database.password ?? "oneapi"))}@${database.host}:${Number(database.port ?? 5432)}/${encodeURIComponent(String(database.name ?? "oneapi"))}`
-      : parsed.database_url ?? "postgres://oneapi:oneapi@localhost:5432/oneapi"
-  );
-  const internalToken = internal.token ?? parsed.internal_token;
-  if (!internalToken) throw new Error("Missing internal_token in config");
+  const secrets = parsed.secrets || {};
+  const redisUrl = "redis://redis:6379";
+  const databaseUrl = `postgres://oneapi:${encodeURIComponent(String(secrets.postgres_password ?? "oneapi"))}@postgres:5432/oneapi`;
+  const internalToken = secrets.internal_token;
+  if (!internalToken) throw new Error("Missing secrets.internal_token in config");
   
-  const bw = parsed.batch_worker || {};
-  const pollSleepMs = Number(bw.poll_sleep_ms ?? 200);
-  const oneapiBaseUrl = bw.oneapi_base_url ?? "http://localhost:3003";
+  const pollSleepMs = 200;
+  const oneapiBaseUrl = "http://oneapi:3003";
   
   return { redisUrl, databaseUrl, internalToken, pollSleepMs, oneapiBaseUrl };
+}
+
+function resolveConfigPath(configPath: string): string {
+  if (fs.existsSync(configPath)) return configPath;
+  if (fs.existsSync("../config/easyai.yaml")) return "../config/easyai.yaml";
+  if (fs.existsSync("config/easyai.yaml")) return "config/easyai.yaml";
+  return configPath;
 }
 
 async function sleep(ms: number): Promise<void> {

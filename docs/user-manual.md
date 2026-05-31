@@ -46,20 +46,20 @@ docker compose up -d --build
 
 健康检查：
 ```bash
-curl -sS http://localhost:3003/healthz
+curl -sS http://localhost:3004/healthz
 ```
 
 建议先打开首页：
-- 首页概览：`http://localhost:3003/`
-- Swagger UI：`http://localhost:3003/docs`
-- OpenAPI：`http://localhost:3003/openapi.json`
-- 内置聊天 UI：`http://localhost:3003/chat`
-- 管理后台：`http://localhost:3003/dashboard`
+- 首页概览：`http://localhost:3004/`
+- Swagger UI：`http://localhost:3004/docs`
+- OpenAPI：`http://localhost:3004/openapi.json`
+- 内置聊天 UI：`http://localhost:3004/chat`
+- 管理后台：`http://localhost:3004/dashboard`
 
 ### 3.2 登录管理后台
 
-- 地址：`http://localhost:3003/dashboard`
-- 认证：HTTP Basic（`config/oneapi/oneapi.yaml` 中的 `security.admin.user` / `security.admin.password`）
+- 地址：`http://localhost:3004/dashboard`
+- 认证：HTTP Basic（用户名默认 `admin`，密码来自 `config/easyai.yaml` 中的 `secrets.admin_password`）
 
 ### 3.3 创建 API Key 并绑定租户
 
@@ -89,23 +89,17 @@ curl -sS http://localhost:3003/healthz
 ### 3.5 客户端发起一次调用
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <your_api_key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
 推荐的本地测试默认模型（磁盘占用小、CPU 可跑）：
-- 通用对话：`local/ollama:qwen2.5:0.5b`（别名 `chat`）
-- 编程任务：`local/ollama:qwen2.5-coder:1.5b`（别名 `coder`）
+- 通用对话：`chat`
+- 编程任务：`coder`
 
-为减少业务侧配置成本，默认在 `oneapi.yaml` 开启 `gateway.model_map` 映射：
-- `chat` → `local/ollama:qwen2.5:0.5b`
-- `coder` → `local/ollama:qwen2.5-coder:1.5b`
-- `gemma4` → `local/ollama:gemma4:e4b`
-- `gemma4_2b` → `local/ollama:gemma4:e2b`
-
-因此业务侧可以直接把 `model` 写成 `chat` 或 `coder`（由网关自动重写为真实模型名）。
+这些模型名来自 `config/easyai.yaml` 的 `models` 段，业务侧可以直接把 `model` 写成 `chat` 或 `coder`。
 
 ## 4. 核心能力说明（产品视角）
 
@@ -131,7 +125,6 @@ curl -sS http://localhost:3003/v1/chat/completions \
 常见响应头：
 - `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset`
 - `X-TokenLimit-Limit` / `X-TokenLimit-Used` / `X-TokenLimit-Reset`（当启用 TPM 限流时）
-- `X-Model-Fallback`（当 `fallback_map` 生效时，表示实际使用的模型）
 
 ### 4.3 成本优化：缓存与"打字机回放"
 
@@ -143,12 +136,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 - `fixed`：每个 chunk 固定延迟
 - `original`：复刻上游真实 chunk 间隔（体验更像真实模型）
 
-**关键配置（在 `config/oneapi/oneapi.yaml` 中设置）：**
-- `cache.enabled`
-- `cache.ttl_seconds`
-- `cache.replay_mode: "fixed" | "original"`
-- `cache.replay_chunk_delay_ms`
-- `cache.replay_max_total_ms`
+缓存默认启用，确定性请求会自动写入 Redis，流式缓存命中会按原始节奏回放。
 
 ### 4.4 可观测与审计
 
@@ -172,11 +160,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 - PII 脱敏（手机号/身份证/邮箱等）
 - 覆盖非流式、流式透传、缓存命中回放，避免敏感信息落盘/落缓存
 
-关键配置（在 `config/oneapi/oneapi.yaml` 中配置）：
-- `guardrails.enabled: true | false`
-- `guardrails.block_internal_ip: true | false`
-- `guardrails.injection_keywords: [...]`
-- `guardrails.pii_mask_enabled: true | false`
+Guardrails 默认启用输入侧拦截；输出侧 PII 脱敏默认关闭。
 
 ### 4.6 批处理（Batch API）
 
@@ -189,14 +173,13 @@ curl -sS http://localhost:3003/v1/chat/completions \
 3. Worker 异步消费队列并执行子请求
 4. 客户端用 `batch_id` 查询进度并下载结果 JSONL
 
-**关键配置（在 `config/oneapi/oneapi.yaml` 中设置）：**
-- `internal.token`（启用 Batch 的必备开关）
-- `batch_worker.oneapi_base_url`（worker 访问网关的内部地址）
+**关键配置（在 `config/easyai.yaml` 中设置）：**
+- `secrets.internal_token`（启用 Batch 的必备开关）
 
 ### 4.7 内置聊天（Chat UI）
 
 提供基于 Web 的对话交互界面：
-- 地址：`http://localhost:3003/chat`
+- 地址：`http://localhost:3004/chat`
 - 调用 `/chat-api/*` 接口，使用与 `/v1/*` 相同的鉴权方式
 - 支持对话历史管理（创建、列表、删除）
 - 支持消息流式输出
@@ -224,7 +207,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 
 - 401：Key 不存在/禁用；或 OAuth 配置错误
 - 429：租户/Key 触发 RPM/TPM；调整配额或扩容上游
-- 503：上游不可用或 Batch 未配置 `internal.token`
+- 503：上游不可用或 Batch 未配置 `secrets.internal_token`
 
 ### 5.4 一键清库与重置
 
@@ -286,14 +269,13 @@ npm run doc-audit
 - OAuth/JWT：`Authorization: Bearer <jwt>`（JWKS/issuer/audience 按环境变量配置）
 
 缓存：
-- `config/oneapi/oneapi.yaml` 中的 `cache.enabled: true`
+- `config/easyai.yaml` 使用默认缓存策略
 - 典型命中条件：确定性请求（如 `temperature: 0`），请求体一致
 - `stream:true` 也可缓存，命中后支持回放节奏 `fixed|original`
 
 响应头：
 - `X-Cache: hit|miss`
 - `X-Upstream`：实际处理请求的上游地址
-- `X-Model-Fallback`：当 `fallback_map` 生效时，显示实际使用的模型名
 - `X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset`
 
 ### 7.2 Batch
@@ -302,35 +284,35 @@ npm run doc-audit
 - `GET /v1/batches/:batchId`
 - `GET /v1/batches/:batchId/output`
 
-Batch 需要在 `config/oneapi/oneapi.yaml` 中配置 `internal.token` 并运行 batch worker。
+Batch 需要在 `config/easyai.yaml` 中配置 `secrets.internal_token` 并运行 batch worker。
 
 ### 7.3 Admin（Dashboard API）
 
 ```bash
 # 用量统计
-curl -u admin:admin http://localhost:3003/admin/api/usage?sinceMinutes=60
+curl -u admin:admin http://localhost:3004/admin/api/usage?sinceMinutes=60
 
 # API Key 管理
-curl -u admin:admin http://localhost:3003/admin/api/keys
-curl -u admin:admin -X POST http://localhost:3003/admin/api/keys \
+curl -u admin:admin http://localhost:3004/admin/api/keys
+curl -u admin:admin -X POST http://localhost:3004/admin/api/keys \
   -H "x-oneapi-admin-action: 1"
-curl -u admin:admin -X POST http://localhost:3003/admin/api/keys/1/revoke \
+curl -u admin:admin -X POST http://localhost:3004/admin/api/keys/1/revoke \
   -H "x-oneapi-admin-action: 1"
 
 # 删除 Key（默认需先 revoke；force 跳过检查）
-curl -u admin:admin -X DELETE http://localhost:3003/admin/api/keys/1 \
+curl -u admin:admin -X DELETE http://localhost:3004/admin/api/keys/1 \
   -H "x-oneapi-admin-action: 1" -H "Content-Type: application/json" \
   -d '{"force": false}'
 
 # 租户管理
-curl -u admin:admin http://localhost:3003/admin/api/tenants
-curl -u admin:admin -X PUT http://localhost:3003/admin/api/tenants/t1 \
+curl -u admin:admin http://localhost:3004/admin/api/tenants
+curl -u admin:admin -X PUT http://localhost:3004/admin/api/tenants/t1 \
   -H "x-oneapi-admin-action: 1" -H "Content-Type: application/json" \
   -d '{"rpm_limit": 100, "tpm_limit": 50000, "disabled": false}'
-curl -u admin:admin -X DELETE http://localhost:3003/admin/api/tenants/t1 \
+curl -u admin:admin -X DELETE http://localhost:3004/admin/api/tenants/t1 \
   -H "x-oneapi-admin-action: 1" -H "Content-Type: application/json" \
   -d '{"force": true}'
-curl -u admin:admin -X POST http://localhost:3003/admin/api/tenants/t1/unbind_keys \
+curl -u admin:admin -X POST http://localhost:3004/admin/api/tenants/t1/unbind_keys \
   -H "x-oneapi-admin-action: 1"
 ```
 
@@ -343,15 +325,15 @@ curl -u admin:admin -X POST http://localhost:3003/admin/api/tenants/t1/unbind_ke
 
 ```bash
 # 列出可用模型
-curl -u admin:admin http://localhost:3003/admin/api/playground/models
+curl -u admin:admin http://localhost:3004/admin/api/playground/models
 
 # 发送测试请求（非流式）
-curl -u admin:admin -X POST http://localhost:3003/admin/api/playground/chat \
+curl -u admin:admin -X POST http://localhost:3004/admin/api/playground/chat \
   -H "x-oneapi-admin-action: 1" -H "Content-Type: application/json" \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}]}'
 
 # 流式测试
-curl -u admin:admin -N -X POST http://localhost:3003/admin/api/playground/chat \
+curl -u admin:admin -N -X POST http://localhost:3004/admin/api/playground/chat \
   -H "x-oneapi-admin-action: 1" -H "Content-Type: application/json" \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}],"stream":true}'
 ```
@@ -362,25 +344,25 @@ curl -u admin:admin -N -X POST http://localhost:3003/admin/api/playground/chat \
 
 ```bash
 # 对话列表
-curl -H "Authorization: Bearer <api-key>" http://localhost:3003/chat-api/conversations
+curl -H "Authorization: Bearer <api-key>" http://localhost:3004/chat-api/conversations
 
 # 创建对话
-curl -X POST -H "Authorization: Bearer <api-key>" http://localhost:3003/chat-api/conversations
+curl -X POST -H "Authorization: Bearer <api-key>" http://localhost:3004/chat-api/conversations
 
 # 删除对话
-curl -X DELETE -H "Authorization: Bearer <api-key>" http://localhost:3003/chat-api/conversations/<id>
+curl -X DELETE -H "Authorization: Bearer <api-key>" http://localhost:3004/chat-api/conversations/<id>
 
 # 获取消息历史
-curl -H "Authorization: Bearer <api-key>" http://localhost:3003/chat-api/conversations/<id>/messages
+curl -H "Authorization: Bearer <api-key>" http://localhost:3004/chat-api/conversations/<id>/messages
 
 # 发送消息（非流式）
 curl -X POST -H "Authorization: Bearer <api-key>" -H "Content-Type: application/json" \
-  http://localhost:3003/chat-api/conversations/<id>/chat \
+  http://localhost:3004/chat-api/conversations/<id>/chat \
   -d '{"model":"chat","message":"hello"}'
 
 # 发送消息（流式）
 curl -N -X POST -H "Authorization: Bearer <api-key>" -H "Content-Type: application/json" \
-  http://localhost:3003/chat-api/conversations/<id>/chat \
+  http://localhost:3004/chat-api/conversations/<id>/chat \
   -d '{"model":"chat","message":"hello","stream":true}'
 ```
 
@@ -408,4 +390,4 @@ curl -N -X POST -H "Authorization: Bearer <api-key>" -H "Content-Type: applicati
 ### 8.4 多租户与鉴权
 
 - **Tenant（租户）**：配额与隔离的基本单位。一个租户可绑定多个 Key；当 Key 绑定租户时，RPM/TPM 会按租户维度统计与约束（同租户共享配额）。
-- **API Key**：调用方凭证，可由管理员在 Dashboard 创建并发放，也可通过环境变量配置静态 key（兼容模式）。
+- **API Key**：调用方凭证，可由管理员在 Dashboard 创建并发放，也可通过 `config/easyai.yaml` 的 `secrets.api_keys` 配置静态 key。

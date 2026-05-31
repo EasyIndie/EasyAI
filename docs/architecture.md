@@ -19,7 +19,7 @@
   - 请求路由 + 负载均衡（带熔断跳过机制的轮询策略）
   - 缓存层 (基于 Redis，针对确定性请求，支持 SSE 流式缓存回放)
   - 跨上游服务的故障转移/熔断回退机制（支持模型级别 fallback 回退）
-  - 模型别名映射（`model_map`）
+  - 统一模型名映射（`models`）
   - 多租户管理（租户级 RPM/TPM 配额、禁用开关）
   - 使用量分析 (Postgres) + 管理看板
   - 异步批处理 API (`/v1/batches`) + 异步 worker
@@ -54,45 +54,26 @@ flowchart LR
 ## 请求链路 (对话补全)
 1. 客户端调用 OneAPI 的 `POST /v1/chat/completions`，携带以下任一凭证:
    - `Authorization: Bearer <api-key>`
-   - `Authorization: Bearer <oauth-jwt>`
 2. 网关对请求主体进行鉴权，并执行 RPM/TPM 速率限制（如果绑定了租户则按租户限流，否则按请求主体限流）。
 3. 网关对请求体执行 Guardrails 检查（注入检测、内网 IP 拦截），拦截则返回 400。
 4. 网关针对确定性调用（如 `temperature: 0`）计算缓存 Key，如果存在缓存则直接返回（同时支持流式和非流式返回，流式命中后支持打字机回放）。
-5. 网关通过 `model_map` 进行模型别名映射，然后选择一个上游服务（使用带熔断跳过机制的轮询策略）并转发请求。
-6. 如果上游返回可重试状态码或超时（429/502/503/504），网关会按 `fallback_map` 尝试其他模型或上游。
+5. 网关选择一个上游服务（默认 LiteLLM，使用带熔断跳过机制的轮询策略）并转发请求。
+6. 如果上游返回错误或超时，网关会返回统一的 OpenAI-compatible 错误格式。
 7. 网关在 Postgres 中记录一条使用事件日志，并导出 Prometheus 监控指标。
 
 ## 配置项
 
-### LiteLLM 专属参数
-- 配置文件: [litellm.yaml](../config/litellm/litellm.yaml)
-- 核心参数:
-  - `service.allowed_models`
-  - `service.log_level`
-  - `providers.ollama.api_base`
-  - `model_aliases`
+### 统一配置
+- 配置文件: [config/easyai.yaml](../config/easyai.yaml)
+- 最小参数:
+  - `app.env`, `app.port`, `app.log_level`
+  - `secrets.admin_password`, `secrets.api_keys`, `secrets.internal_token`, `secrets.postgres_password`
+  - `providers.*`：上游供应商地址和密钥
+  - `models.*`：客户端可见模型名到真实供应商模型的映射
 
-未配置 `service.allowed_models` 时，LiteLLM 会自动将 `model_aliases` 的键作为允许模型列表。
-
-### OneAPI 网关设置
-- 配置文件: [config/oneapi/oneapi.yaml](../config/oneapi/oneapi.yaml)
-- 核心参数:
-  - `server.env`, `server.port`, `server.body_limit`, `server.trust_proxy`
-  - `security.auth_modes`, `security.api_keys`
-  - `security.oauth.jwks_url`, `security.oauth.audience`, `security.oauth.issuer`
-  - `security.admin.user`, `security.admin.password`, `security.admin.allowed_cidrs`
-  - `security.metrics_allowed_cidrs`, `security.security_headers`
-  - `database.redis_url`, `database.host`, `database.port`, `database.user`, `database.password`, `database.name`
-  - `gateway.upstreams`, `gateway.upstream_timeout_ms`
-  - `gateway.rate_limit_rpm`
-  - `gateway.cache.enabled`, `gateway.cache.ttl_seconds`, `gateway.cache.replay_mode`, `gateway.cache.replay_chunk_delay_ms`, `gateway.cache.replay_max_total_ms`
-  - `gateway.model_map`, `gateway.fallback_map`
-  - `gateway.guardrails.*`
-  - `internal.token`（启用 Batch 和内部鉴权的必备开关）
-  - `internal.allow_cidrs`
 
 ### 组合运行参数
-- 组合模式配置: 已合并至各组件 YAML 配置和 `docker-compose.yml`
+- 组合模式配置: 已合并到 `config/easyai.yaml` 和 `docker-compose.yml`
 - 组合部署入口: [docker-compose.yml](../docker-compose.yml)
 
 ## 可观测性

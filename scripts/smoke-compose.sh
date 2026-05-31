@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:3003}"
-CONFIG_FILE="${CONFIG_FILE:-config/oneapi/oneapi.yaml}"
+BASE_URL="${BASE_URL:-http://localhost:3004}"
+CONFIG_FILE="${CONFIG_FILE:-config/easyai.yaml}"
 
 read_yaml_value() {
   local key="$1"
@@ -14,19 +14,16 @@ read_yaml_value() {
       sub(/"$/, "", v)
       return v
     }
-    key == "api_key" && $0 ~ /^  api_keys:/ { in_api_keys=1; next }
-    in_api_keys && $0 ~ /^    - / { sub(/^    - /, ""); print clean($0); exit }
+    key == "api_key" && $0 ~ /^    api_keys:/ { in_api_keys=1; next }
+    in_api_keys && $0 ~ /^      - / { sub(/^      - /, ""); print clean($0); exit }
     in_api_keys && $0 !~ /^    / { in_api_keys=0 }
 
-    $0 ~ /^    user:/ && in_admin && key == "admin_user" { sub(/^    user:[[:space:]]*/, ""); print clean($0); exit }
-    $0 ~ /^    password:/ && in_admin && key == "admin_pass" { sub(/^    password:[[:space:]]*/, ""); print clean($0); exit }
-    $0 ~ /^  admin:/ { in_admin=1; next }
-    in_admin && $0 !~ /^    / { in_admin=0 }
+    key == "admin_pass" && $0 ~ /^  admin_password:/ { sub(/^  admin_password:[[:space:]]*/, ""); print clean($0); exit }
   ' "$CONFIG_FILE"
 }
 
 API_KEY="${API_KEY:-$(read_yaml_value api_key)}"
-ADMIN_USER="${ADMIN_USER:-$(read_yaml_value admin_user)}"
+ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-$(read_yaml_value admin_pass)}"
 
 json() {

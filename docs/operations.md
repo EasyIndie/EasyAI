@@ -6,26 +6,14 @@
 
 ### 1.1 关键配置项（速查）
 
-**OneAPI Gateway (在 `config/oneapi/oneapi.yaml` 中)**
-- `server.env` / `server.port` / `server.body_limit` / `server.trust_proxy`
-- `security.admin.user` / `security.admin.password`：Dashboard 与 `/admin/api/*` 的 BasicAuth
-- `security.admin.allowed_cidrs`：Dashboard 与管理 API 来源 IP 白名单；公网部署时不要设置为 `any`
-- `security.metrics_allowed_cidrs`：Prometheus `/metrics` 来源 IP 白名单
-- `security.security_headers`：基础安全响应头
-- `security.auth_modes`：`apikey` / `oauth`
-- `security.api_keys`：兼容模式静态 key（可选；也可在 Dashboard 创建 DB key）
-- `database.redis_url` 与 `database.host/user/password/name/port`
-- `gateway.upstreams`：上游列表（默认指向 litellm）
-- `gateway.rate_limit_rpm`：默认 RPM（全局默认值，Key 和 Tenant 可独立覆盖）
-- `gateway.cache.enabled` / `gateway.cache.ttl_seconds`
-- `gateway.cache.replay_mode: "fixed" | "original"` / `gateway.cache.replay_chunk_delay_ms` / `gateway.cache.replay_max_total_ms`
-- Guardrails：`gateway.guardrails.*`
-- `internal.token`（启用 Batch 必配）
-- `internal.allow_cidrs`（internal token 来源 IP 白名单 CIDR，默认仅放通内网）
-
-**Batch Worker (也在 `oneapi.yaml` 中)**
-- `batch_worker.oneapi_base_url`：worker 调用网关的内部地址（compose 默认 `http://oneapi:3003`）
-- `internal.token`：worker 与网关共用该值
+**统一配置（在 `config/easyai.yaml` 中）**
+- `app.env` / `app.port` / `app.log_level`
+- `secrets.admin_password`：Dashboard 与 `/admin/api/*` 的管理密码，用户名默认 `admin`
+- `secrets.api_keys`：客户端调用 `/v1/*` 使用的 API Key
+- `secrets.internal_token`：Batch Worker 与网关之间的内部 token
+- `secrets.postgres_password`：PostgreSQL 密码
+- `providers`：上游供应商配置，例如 OpenAI、DeepSeek、Ollama
+- `models`：对外暴露的模型名与真实供应商模型映射
 
 ### 1.2 启动与健康检查
 
@@ -34,16 +22,16 @@ docker compose up -d --build redis postgres litellm oneapi batch_worker
 ```
 
 ```bash
-curl -sS http://localhost:3003/healthz
-curl -sS http://localhost:3003/metrics | head
+curl -sS http://localhost:3004/healthz
+curl -sS http://localhost:3004/metrics | head
 ```
 
-如果 `/metrics` 返回 403，说明当前来源 IP 不在 `security.metrics_allowed_cidrs` 中。公网部署时建议让监控系统走内网地址或把监控节点 CIDR 加入白名单。
+如果 `/metrics` 返回 403，说明当前来源 IP 不在服务默认内网白名单中。公网部署时建议让监控系统走内网地址。
 
 ### 1.2.1 发布前安全检查
 
 ```bash
-grep -E 'replace-with|dev-key|dev-internal|oneapi:oneapi@' config/oneapi/oneapi.yaml docker-compose.yml
+grep -E 'REPLACE_WITH_|dev-key|dev-internal|postgres_password: "oneapi"' config/easyai.yaml
 docker compose config | grep -E '5432:5432|6379:6379|4000:4000|11434:11434' && echo "unexpected exposed port"
 ```
 
@@ -60,7 +48,17 @@ docker compose config | grep -E '5432:5432|6379:6379|4000:4000|11434:11434' && e
 默认写入 `backups/postgres/`，可用 `BACKUP_DIR=/path/to/dir` 覆盖。恢复前请确认目标环境：
 
 ```bash
+# 生产 override
+COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/backup-postgres.sh
+```
+
+```bash
 ./scripts/restore-postgres.sh backups/postgres/oneapi_YYYYmmdd_HHMMSS.dump --yes
+```
+
+```bash
+# 生产 override
+COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/restore-postgres.sh backups/postgres/oneapi_YYYYmmdd_HHMMSS.dump --yes
 ```
 
 ### 1.3 一键 Smoke（推荐）
@@ -71,10 +69,10 @@ docker compose config | grep -E '5432:5432|6379:6379|4000:4000|11434:11434' && e
 ./scripts/smoke-compose.sh
 ```
 
-脚本默认从 `config/oneapi/oneapi.yaml` 读取 API Key 和后台账号；也可以临时覆盖连接参数：
+脚本默认从 `config/easyai.yaml` 读取 API Key 和后台账号；也可以临时覆盖连接参数：
 
 ```bash
-BASE_URL=http://localhost:3003 ./scripts/smoke-compose.sh
+BASE_URL=http://localhost:3004 ./scripts/smoke-compose.sh
 ```
 
 ### 1.3 标准验收 SOP（推荐）
@@ -86,14 +84,14 @@ BASE_URL=http://localhost:3003 ./scripts/smoke-compose.sh
 1) 服务健康：
 
 ```bash
-curl -sS http://localhost:3003/healthz
+curl -sS http://localhost:3004/healthz
 docker compose exec -T litellm python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
 ```
 
 2) 接口文档可访问（用户侧）：
 
 ```bash
-curl -sS http://localhost:3003/openapi.json | head
+curl -sS http://localhost:3004/openapi.json | head
 ```
 
 3) 确认本地模型已拉取（否则可能出现 upstream error）：
@@ -144,16 +142,16 @@ PY
 2) 走 OneAPI（真实模型名）验证转发链路：
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Same question, short answer."}],"temperature":0}' | head
 ```
 
-3) 走 OneAPI（别名模型）验证 `model_map` 生效：
+3) 走 OneAPI（统一模型名）验证配置生效：
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"coder","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}' | head
@@ -166,7 +164,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 2) 流式（SSE）：
 
 ```bash
-curl -N http://localhost:3003/v1/chat/completions \
+curl -N http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"coder","messages":[{"role":"user","content":"Write a tiny TypeScript function."}],"temperature":0,"stream":true}'
@@ -175,12 +173,12 @@ curl -N http://localhost:3003/v1/chat/completions \
 3) 缓存验证（两次相同请求，关注 `X-Cache`）：
 
 ```bash
-curl -N http://localhost:3003/v1/chat/completions \
+curl -N http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"chat","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
 
-curl -N http://localhost:3003/v1/chat/completions \
+curl -N http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"chat","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
@@ -189,12 +187,11 @@ curl -N http://localhost:3003/v1/chat/completions \
 关注响应头：
 - `X-Cache: hit|miss`
 - `X-Upstream`
-- `X-Model-Fallback`（当使用 `fallback_map` 时出现）
 
 4) 内置聊天界面（Chat UI）：
 
 ```bash
-curl -sS http://localhost:3003/chat | head
+curl -sS http://localhost:3004/chat | head
 ```
 
 #### Step D：失败时的最短诊断动作
@@ -209,17 +206,17 @@ docker compose logs --tail=200 batch_worker
 ```
 
 - 常见现象与含义：
-  - `model not allowed` (400)：LiteLLM 的 `allowed_models` 不包含目标模型，或 OneAPI model map 未配置别名。
+  - `model not allowed` (400)：请求的模型名不在 `config/easyai.yaml` 的 `models` 中。
   - `Model not found` (404)：模型名称正确，但底层的 Ollama 未拉取该模型（执行 `ollama pull`）。
   - `Upstream connection error` (502)：Ollama 容器未启动或网络不通。
-  - `Upstream timeout` (504)：模型加载或生成耗时过长，超出 `litellm.yaml` 中配置的超时时间。
+  - `Upstream timeout` (504)：模型加载或生成耗时过长，超出 `config/easyai.yaml` 中配置的超时时间。
   - `Insufficient memory` (507)：宿主机/容器可用内存不足以加载该模型（LiteLLM 捕获后会在后台尝试自愈清理）。
   - `Client Disconnected` (499)：客户端（如浏览器/curl）主动中断了请求，通常表现为流式生成意外停止。
 
 **基础转发（非流式）**
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"hello"}],"temperature":0}'
@@ -228,7 +225,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 **编程模型（轻量）**
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5-coder:1.5b","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}'
@@ -237,7 +234,7 @@ curl -sS http://localhost:3003/v1/chat/completions \
 **使用默认模型别名（推荐）**
 
 ```bash
-curl -sS http://localhost:3003/v1/chat/completions \
+curl -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"coder","messages":[{"role":"user","content":"Write a TypeScript function to add two numbers."}],"temperature":0}'
@@ -246,12 +243,12 @@ curl -sS http://localhost:3003/v1/chat/completions \
 **Streaming + 缓存命中（两次相同请求）**
 
 ```bash
-curl -N http://localhost:3003/v1/chat/completions \
+curl -N http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
 
-curl -N http://localhost:3003/v1/chat/completions \
+curl -N http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"cache-demo"}],"temperature":0,"stream":true}'
@@ -265,13 +262,13 @@ curl -N http://localhost:3003/v1/chat/completions \
 **TTFT/TPS 指标**
 
 ```bash
-curl -sS http://localhost:3003/metrics | grep -E '^easyai_ttft_seconds|^easyai_tps' | head
+curl -sS http://localhost:3004/metrics | grep -E '^easyai_ttft_seconds|^easyai_tps' | head
 ```
 
 **Guardrails（应 400）**
 
 ```bash
-curl -i -sS http://localhost:3003/v1/chat/completions \
+curl -i -sS http://localhost:3004/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"call 10.0.0.1 now"}],"temperature":0}' | head
@@ -280,7 +277,7 @@ curl -i -sS http://localhost:3003/v1/chat/completions \
 **Batch**
 
 ```bash
-curl -sS -X POST http://localhost:3003/v1/batches \
+curl -sS -X POST http://localhost:3004/v1/batches \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"requests":[{"endpoint":"/v1/chat/completions","body":{"model":"local/ollama:qwen2.5:0.5b","messages":[{"role":"user","content":"batch-1"}],"temperature":0}}]}'
@@ -318,19 +315,18 @@ docker compose exec -T redis redis-cli LLEN 'batch:q:v1'
 ### 2.3 常见问题与判断
 
 - **401 Unauthorized（/v1/*）**
-  - API key 模式：key 是否存在于 `security.api_keys` 或数据库（Dashboard 创建）
-  - OAuth 模式：`oauth.jwks_url` 是否可达、issuer/audience 是否匹配
+  - API key 模式：key 是否存在于 `secrets.api_keys` 或数据库（Dashboard 创建）
 - **401 Unauthorized（/admin/api/* 写操作）**
   - 除 BasicAuth 外，写操作必须携带 `x-oneapi-admin-action: 1`
 - **429 Rate limited**
-  - 调整 `gateway.rate_limit_rpm` 或在 Dashboard 调整 key/tenant 配额
+  - 在 Dashboard 调整 key/tenant 配额
   - tenant 绑定后按 tenant 聚合限流（同租户 key 共享）
   - 租户 TPM（每分钟 token 数）超限也会返回 429
 - **503（/v1/batches）**
-  - 未配置 `internal.token`（Batch 未启用）
+  - 未配置 `secrets.internal_token`（Batch 未启用）
   - batch_worker 未运行或 token 不一致
 - **缓存 hit 不出现**
-  - `cache.enabled: true`
+  - 请求是否为确定性请求，例如 `temperature: 0`
   - 确定性请求（典型：`temperature=0`），且请求体一致
   - stream 缓存写入发生在完整 SSE 结束后（收到 `data: [DONE]`）
 - **Redis 不可用**
@@ -388,13 +384,13 @@ docker compose down
 停止容器并删除 Postgres 数据卷，下次启动后数据库会重新初始化：
 
 ```bash
-docker compose down && docker volume rm easyai_postgres_data
+docker compose down && docker volume rm easyai_dev_postgres_data
 ```
 
 停止容器、删除 Postgres 数据卷并重新构建启动服务：
 
 ```bash
-docker compose down && docker volume rm easyai_postgres_data && docker compose up -d --build
+docker compose down && docker volume rm easyai_dev_postgres_data && docker compose up -d --build
 ```
 
 ### 3.3 默认清空范围
@@ -416,4 +412,4 @@ docker compose down && docker volume rm easyai_postgres_data && docker compose u
 
 如果您只想让 Dashboard 用量归零，而保留租户和 API Key，请使用 `--usage-only`。
 
-如需直接清理 Docker 容器，请优先使用上面的精确命令，不要直接执行 `docker compose down -v`，否则会连同 `ollama_data` 模型卷一起删除，已拉取的本地模型也会丢失。
+如需直接清理 Docker 容器，请优先使用上面的精确命令，不要直接执行 `docker compose down -v`，否则会连同 `easyai_dev_ollama_data` 模型卷一起删除，已拉取的本地模型也会丢失。
