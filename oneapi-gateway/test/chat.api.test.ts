@@ -228,3 +228,75 @@ test("chat api: streams assistant response and persists it", async () => {
     await upstream.close();
   }
 });
+
+test("chat api: persists stream chunks that use data colon without a space", async () => {
+  const upstream = Fastify();
+  upstream.post("/v1/chat/completions", async (_req, reply) => {
+    reply.header("content-type", "text/event-stream");
+    return reply.send([
+      'data:{"choices":[{"delta":{"content":"no"}}]}',
+      "",
+      'data:{"choices":[{"delta":{"content":" space"}}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}',
+      "",
+      "data:[DONE]",
+      "",
+    ].join("\n"));
+  });
+  await upstream.listen({ host: "127.0.0.1", port: 0 });
+  const upstreamAddr = upstream.server.address();
+  assert.ok(upstreamAddr && typeof upstreamAddr === "object");
+  const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
+
+  const app = Fastify({ logger: false });
+  try {
+    const cfg = makeConfig({ upstreams: [upstreamUrl] });
+    const redis = new FakeRedis() as any;
+    const db = new MemoryChatDb() as any;
+    const pool = new UpstreamPool([upstreamUrl]);
+
+    await registerProxyRoutes(app, {
+      cfg,
+      redis,
+      db,
+      pool,
+      authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
+    });
+    await registerChatRoutes(app, cfg, undefined, db, redis);
+
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const appAddr = app.server.address();
+    assert.ok(appAddr && typeof appAddr === "object");
+    cfg.port = appAddr.port;
+    const baseUrl = `http://127.0.0.1:${appAddr.port}`;
+
+    const created = await fetch(`${baseUrl}/chat-api/conversations`, {
+      method: "POST",
+      headers: { authorization: "Bearer k1" },
+    });
+    const createdJson: any = await created.json();
+
+    const chat = await fetch(`${baseUrl}/chat-api/conversations/${createdJson.id}/chat`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer k1",
+        "content-type": "application/json",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify({ model: "chat", message: "hi", stream: true }),
+    });
+
+    const text = await chat.text();
+    assert.equal(chat.status, 200, text);
+    assert.equal(text.includes("no"), true, text);
+    assert.equal(text.includes(" space"), true, text);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const assistant = db.messages.find((m: any) => m.role === "assistant");
+    assert.equal(assistant?.content, "no space");
+    assert.equal(assistant?.prompt_tokens, 1);
+    assert.equal(assistant?.completion_tokens, 2);
+  } finally {
+    await app.close();
+    await upstream.close();
+  }
+});

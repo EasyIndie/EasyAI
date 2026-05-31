@@ -17,23 +17,38 @@ function authHeaderFromRequest(req: any): string {
   return h ? String(Array.isArray(h) ? h[0] : h) : "";
 }
 
+function parseSseDataEvents(buffer: string): string[] {
+  return buffer
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n\n")
+    .map((event) =>
+      event
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n"),
+    )
+    .filter(Boolean);
+}
+
 function extractAssistantContent(sseText: string): { content: string; promptTokens: number; completionTokens: number } {
   let content = "";
   let promptTokens = 0;
   let completionTokens = 0;
 
-  for (const line of sseText.split("\n")) {
-    if (line.startsWith("data: ") && line !== "data: [DONE]") {
-      try {
-        const j = JSON.parse(line.slice(6));
-        const delta = j?.choices?.[0]?.delta?.content;
-        if (typeof delta === "string") content += delta;
-        if (j?.usage) {
-          promptTokens = j.usage.prompt_tokens ?? 0;
-          completionTokens = j.usage.completion_tokens ?? 0;
-        }
-      } catch {}
-    }
+  for (const dataText of parseSseDataEvents(sseText)) {
+    if (dataText === "[DONE]") continue;
+    try {
+      const j = JSON.parse(dataText);
+      const delta = j?.choices?.[0]?.delta?.content;
+      if (typeof delta === "string") content += delta;
+      if (j?.usage) {
+        promptTokens = j.usage.prompt_tokens ?? 0;
+        completionTokens = j.usage.completion_tokens ?? 0;
+      }
+    } catch {}
   }
   return { content, promptTokens, completionTokens };
 }
@@ -260,7 +275,7 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
       } finally {
         reader.releaseLock();
 
-        const isComplete = responseText.includes("data: [DONE]");
+        const isComplete = parseSseDataEvents(responseText).includes("[DONE]");
         if (isComplete) {
           const { content, promptTokens, completionTokens } = extractAssistantContent(responseText);
           if (content) {

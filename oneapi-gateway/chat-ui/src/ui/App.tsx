@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClientId } from "./id";
+import { shouldApplyLoadedMessages } from "./messageLoad";
+import { parseSseDataEvents } from "./stream";
 
 type Conversation = {
   id: string;
@@ -178,6 +181,9 @@ export function App() {
   const testAbortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const currentIdRef = useRef<string | null>(null);
+  const isStreamingRef = useRef(false);
+  const messageLoadSeqRef = useRef(0);
 
   const currentConv = useMemo(
     () => conversations.find((c) => c.id === currentId) ?? null,
@@ -191,6 +197,14 @@ export function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamContent, scrollToBottom]);
+
+  useEffect(() => {
+    currentIdRef.current = currentId;
+  }, [currentId]);
+
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   const loadModels = useCallback(async () => {
     try {
@@ -220,8 +234,16 @@ export function App() {
   }, []);
 
   const loadMessages = useCallback(async (convId: string) => {
+    const seq = ++messageLoadSeqRef.current;
     try {
       const data = await fetchJson(`/chat-api/conversations/${encodeURIComponent(convId)}/messages`);
+      if (!shouldApplyLoadedMessages({
+        requestSeq: seq,
+        currentSeq: messageLoadSeqRef.current,
+        requestedConversationId: convId,
+        currentConversationId: currentIdRef.current,
+        isStreaming: isStreamingRef.current,
+      })) return;
       setMessages(data?.messages ?? []);
     } catch {}
   }, []);
@@ -366,6 +388,7 @@ export function App() {
     if (!msg || isStreaming || !selectedModel) return;
 
     setInputText("");
+    messageLoadSeqRef.current += 1;
     setIsStreaming(true);
     setStreamContent("");
     setStatus("发送中...");
@@ -389,7 +412,7 @@ export function App() {
     }
 
     const userMsg: Message = {
-      id: crypto.randomUUID(),
+      id: createClientId(),
       conversation_id: activeConvId,
       role: "user",
       content: msg,
@@ -432,41 +455,64 @@ export function App() {
       const decoder = new TextDecoder();
       let buffer = "";
       let output = "";
+      let doneSeen = false;
 
-      while (true) {
+      while (!doneSeen) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
 
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const event of events) {
-          for (const line of event.split("\n")) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ")) continue;
-            const dataText = trimmed.slice(6);
-            if (dataText === "[DONE]") continue;
-            let parsed: any;
-            try {
-              parsed = JSON.parse(dataText);
-            } catch {
-              continue;
-            }
-            if (parsed?.error?.message) {
-              throw new Error(String(parsed.error.message));
-            }
-            const text = extractStreamChunkText(parsed);
-            if (text) {
-              output += text;
-              setStreamContent(output);
-            }
+        const parsedEvents = parseSseDataEvents(buffer);
+        buffer = parsedEvents.rest;
+        for (const dataText of parsedEvents.dataEvents) {
+          if (dataText === "[DONE]") {
+            doneSeen = true;
+            break;
+          }
+          let parsed: any;
+          try {
+            parsed = JSON.parse(dataText);
+          } catch {
+            continue;
+          }
+          if (parsed?.error?.message) {
+            throw new Error(String(parsed.error.message));
+          }
+          const text = extractStreamChunkText(parsed);
+          if (text) {
+            output += text;
+            setStreamContent(output);
           }
         }
       }
+      if (buffer) {
+        const parsedEvents = parseSseDataEvents(buffer, true);
+        buffer = parsedEvents.rest;
+        for (const dataText of parsedEvents.dataEvents) {
+          if (dataText === "[DONE]") break;
+          let parsed: any;
+          try {
+            parsed = JSON.parse(dataText);
+          } catch {
+            continue;
+          }
+          if (parsed?.error?.message) {
+            throw new Error(String(parsed.error.message));
+          }
+          const text = extractStreamChunkText(parsed);
+          if (text) {
+            output += text;
+            setStreamContent(output);
+          }
+        }
+      }
+      if (doneSeen) {
+        await reader.cancel().catch(() => {});
+      }
 
       const assistantMsg: Message = {
-        id: crypto.randomUUID(),
+        id: createClientId(),
         conversation_id: activeConvId,
         role: "assistant",
         content: output,
@@ -483,7 +529,7 @@ export function App() {
       } else {
         setStatus(e?.message ?? "请求失败");
         const errMsg: Message = {
-          id: crypto.randomUUID(),
+          id: createClientId(),
           conversation_id: activeConvId,
           role: "assistant",
           content: `**错误:** ${e?.message ?? "请求失败"}`,
@@ -574,8 +620,9 @@ export function App() {
         let raw = "";
         let output = "";
         let usageText = "";
+        let doneSeen = false;
 
-        while (true) {
+        while (!doneSeen) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
@@ -583,37 +630,62 @@ export function App() {
           buffer += chunk;
           setTestRaw(raw);
 
-          const events = buffer.split("\n\n");
-          buffer = events.pop() ?? "";
-          for (const event of events) {
-            const lines = event
-              .split("\n")
-              .map((line) => line.trim())
-              .filter((line) => line.startsWith("data: "));
-            for (const line of lines) {
-              const dataText = line.slice(6);
-              if (dataText === "[DONE]") continue;
-              let parsed: any;
-              try {
-                parsed = JSON.parse(dataText);
-              } catch {
-                continue;
-              }
-              if (parsed?.error?.message) {
-                throw new Error(String(parsed.error.message));
-              }
-              const text = extractStreamChunkText(parsed);
-              if (text) {
-                output += text;
-                setTestResult(output);
-              }
-              const nextUsage = formatUsage(parsed);
-              if (nextUsage) {
-                usageText = nextUsage;
-                setTestUsage(nextUsage);
-              }
+          const parsedEvents = parseSseDataEvents(buffer);
+          buffer = parsedEvents.rest;
+          for (const dataText of parsedEvents.dataEvents) {
+            if (dataText === "[DONE]") {
+              doneSeen = true;
+              break;
+            }
+            let parsed: any;
+            try {
+              parsed = JSON.parse(dataText);
+            } catch {
+              continue;
+            }
+            if (parsed?.error?.message) {
+              throw new Error(String(parsed.error.message));
+            }
+            const text = extractStreamChunkText(parsed);
+            if (text) {
+              output += text;
+              setTestResult(output);
+            }
+            const nextUsage = formatUsage(parsed);
+            if (nextUsage) {
+              usageText = nextUsage;
+              setTestUsage(nextUsage);
             }
           }
+        }
+        if (buffer) {
+          const parsedEvents = parseSseDataEvents(buffer, true);
+          buffer = parsedEvents.rest;
+          for (const dataText of parsedEvents.dataEvents) {
+            if (dataText === "[DONE]") break;
+            let parsed: any;
+            try {
+              parsed = JSON.parse(dataText);
+            } catch {
+              continue;
+            }
+            if (parsed?.error?.message) {
+              throw new Error(String(parsed.error.message));
+            }
+            const text = extractStreamChunkText(parsed);
+            if (text) {
+              output += text;
+              setTestResult(output);
+            }
+            const nextUsage = formatUsage(parsed);
+            if (nextUsage) {
+              usageText = nextUsage;
+              setTestUsage(nextUsage);
+            }
+          }
+        }
+        if (doneSeen) {
+          await reader.cancel().catch(() => {});
         }
 
         const latency = Math.round(performance.now() - startedAt);
@@ -1140,7 +1212,7 @@ export function App() {
                 </div>
               ))}
 
-              {isStreaming && streamContent && (
+              {isStreaming && (
                 <div style={{
                   marginBottom: 20,
                   display: "flex",
