@@ -22,10 +22,10 @@ providers:
 models:
   chat:
     provider: deepseek
-    model: deepseek-chat
-  reasoner:
+    model: deepseek-v4-flash
+  coder:
     provider: deepseek
-    model: deepseek-reasoner
-  gpt:
+    model: deepseek-v4-pro
+  reasoner:
     provider: openai
-    model: gpt-4o-mini
+    model: gpt-5.5

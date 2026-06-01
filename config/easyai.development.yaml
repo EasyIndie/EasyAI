@@ -20,6 +20,15 @@ providers:
     api_key: ""
 
 models:
-  chat:
+  test:
     provider: ollama
     model: qwen2.5:0.5b
+  chat:
+    provider: deepseek
+    model: deepseek-v4-flash
+  coder:
+    provider: deepseek
+    model: deepseek-v4-pro
+  reasoner:
+    provider: openai
+    model: gpt-5.5
