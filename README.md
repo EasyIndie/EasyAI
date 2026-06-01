@@ -1,5 +1,7 @@
 # EasyAI
 
+[![CI](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml)
+
 EasyAI 是一个可本地运行的统一 LLM 网关平台，包含：
 - OneAPI Gateway（统一 `/v1/*` 入口、鉴权、限流、缓存、审计）
 - LiteLLM Service（模型别名与上游适配）
