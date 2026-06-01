@@ -50,6 +50,10 @@ function generateApiKey(): string {
   return `sk-${b}`;
 }
 
+function runtimeKeyEnvironment(cfg: Config): "development" | "production" {
+  return cfg.appEnv === "production" ? "production" : "development";
+}
+
 function parseStringList(value: unknown): string[] | null {
   if (value === null || value === undefined || value === "") return null;
   if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
@@ -64,12 +68,6 @@ function parseNullableDate(value: unknown): string | null {
   const d = new Date(String(value));
   if (Number.isNaN(d.getTime())) throw new Error("invalid date");
   return d.toISOString();
-}
-
-function normalizeApiKeyEnvironment(value: unknown): "development" | "production" {
-  const raw = typeof value === "string" ? value.trim() : "";
-  if (raw === "development" || raw === "dev") return "development";
-  return "production";
 }
 
 function keyStatus(k: { revoked_at: string | null; expires_at?: string | null; revocation_scheduled_at?: string | null }): string {
@@ -131,10 +129,10 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
       keyPrefix: prefix,
       keySuffix: suffix,
       name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
-      environment: normalizeApiKeyEnvironment(body.environment),
+      environment: runtimeKeyEnvironment(cfg),
       scopes: parseStringList(body.scopes),
       expiresAt,
-      ipAllowCidrs: parseStringList(body.ip_allow_cidrs),
+      ipAllowCidrs: null,
     });
     return { id: out.id, api_key: raw, key_prefix: prefix, key_suffix: suffix, masked_key: `${prefix}...${suffix}` };
   });
@@ -177,10 +175,10 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
     }
     await updateApiKeyMetadata(db, id, {
       name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
-      environment: normalizeApiKeyEnvironment(body.environment),
+      environment: runtimeKeyEnvironment(cfg),
       scopes: parseStringList(body.scopes),
       expiresAt,
-      ipAllowCidrs: parseStringList(body.ip_allow_cidrs),
+      ipAllowCidrs: null,
     });
     return { ok: true };
   });

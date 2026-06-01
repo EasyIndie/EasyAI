@@ -33,7 +33,7 @@ function buildPlaygroundAuthHeaders(cfg: Config): Record<string, string> | undef
 function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): string {
   const capabilityItems = [
     "统一 OpenAI-compatible 入口，屏蔽上游模型服务差异",
-    "支持 API Key / OAuth 调用，按租户做配额和限流治理",
+    "支持 API Key 调用，按租户做配额和限流治理",
     "内置聊天界面，支持会话历史、流式输出和模型测试",
     "提供 Batch API，用于离线批量请求和异步处理",
     "提供缓存、回放、指标和用量统计，便于控制成本和排障",

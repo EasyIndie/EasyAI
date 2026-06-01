@@ -14,11 +14,20 @@ read_yaml_value() {
       sub(/"$/, "", v)
       return v
     }
-    key == "api_key" && $0 ~ /^    api_keys:/ { in_api_keys=1; next }
-    in_api_keys && $0 ~ /^      - / { sub(/^      - /, ""); print clean($0); exit }
-    in_api_keys && $0 !~ /^    / { in_api_keys=0 }
+    # Parse `secrets.api_keys[0]` without relying on fixed indentation.
+    key == "api_key" && $0 ~ /^[[:space:]]*api_keys:[[:space:]]*$/ { in_api_keys=1; next }
+    in_api_keys && $0 ~ /^[[:space:]]*-[[:space:]]*/ {
+      sub(/^[[:space:]]*-[[:space:]]*/, "")
+      print clean($0)
+      exit
+    }
+    in_api_keys && $0 !~ /^[[:space:]]*-[[:space:]]*/ && $0 !~ /^[[:space:]]*$/ { in_api_keys=0 }
 
-    key == "admin_pass" && $0 ~ /^  admin_password:/ { sub(/^  admin_password:[[:space:]]*/, ""); print clean($0); exit }
+    key == "admin_pass" && $0 ~ /^[[:space:]]*admin_password:[[:space:]]*/ {
+      sub(/^[[:space:]]*admin_password:[[:space:]]*/, "")
+      print clean($0)
+      exit
+    }
   ' "$CONFIG_FILE"
 }
 

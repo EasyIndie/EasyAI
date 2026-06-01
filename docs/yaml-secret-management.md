@@ -1,58 +1,39 @@
-# YAML Secret Management
+# YAML 密钥管理
 
-This project keeps configuration YAML as the source of truth, but committed YAML files must not contain deployable secrets.
+项目采用 YAML 配置。规则是：
+- 入仓文件只放开发默认值或占位符
+- 真实生产密钥只放本地私有文件（不入仓）
 
-## Files
+## 1. 文件角色
 
-- `config/easyai.development.yaml`: committed development config with non-secret defaults.
-- `config/easyai.production.local.yaml`: real deployment config. Ignored by Git.
-- `docker-compose.local.yml`: generated Compose overrides for Postgres password and mounting the local YAML. Ignored by Git.
+- 入仓开发配置：`config/easyai.development.yaml`
+- 入仓生产示例：`config/easyai.production.example.yaml`
+- 本地生产配置：`config/easyai.production.local.yaml`（git ignore）
+- 生产 override：`docker-compose.local.yml`（git ignore）
 
-Development uses Compose project `easyai-dev` and volumes `easyai_dev_*`. The generated production override uses Compose project `easyai-prod` and volumes `easyai_prod_*`.
-
-Start a private deployment config from the tracked examples:
+## 2. 生产配置步骤
 
 ```bash
 cp config/easyai.production.example.yaml config/easyai.production.local.yaml
-# Edit config/easyai.production.local.yaml and replace REPLACE_WITH_* first.
+# 编辑并替换所有 REPLACE_WITH_*
 python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
 ```
 
-Rerun the render command whenever `secrets.postgres_password` changes.
-
-## Run With Local YAML
+启动：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-The override mounts `*.local.yaml` into the containers at the same paths the services already read, so application code still uses YAML-only configuration.
+## 3. 必换敏感项
 
-## OpenAI And DeepSeek
+- `secrets.admin_password`
+- `secrets.api_keys`
+- `secrets.internal_token`
+- `secrets.postgres_password`
+- `providers.<name>.api_key`（如 OpenAI / DeepSeek）
 
-Put provider credentials in `config/easyai.production.local.yaml`:
+## 4. 运行时保护
 
-```yaml
-providers:
-  openai:
-    api_key: "sk-..."
-  deepseek:
-    api_base: "https://api.deepseek.com/v1"
-    api_key: "sk-..."
-
-models:
-  gpt:
-    provider: openai
-    model: gpt-4o-mini
-  chat:
-    provider: deepseek
-    model: deepseek-chat
-```
-
-The keys under `models` are the model names clients send to `/v1/chat/completions`.
-
-## Production Guards
-
-`oneapi-gateway` refuses to start in production when admin passwords, API keys, internal tokens, or the database password still use placeholder/default values.
-
-`litellm-service` refuses placeholder provider API keys when `app.env: "production"` is set.
+- `app.env: production` 时，网关会拒绝默认/占位敏感值
+- LiteLLM 会拒绝生产环境下的占位 provider key

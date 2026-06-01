@@ -182,10 +182,6 @@ function scopeDisplayName(scope: string): string {
   return SCOPE_OPTIONS.find((opt) => opt.value === scope)?.label ?? scope;
 }
 
-function normalizeKeyEnvironment(value: string | null | undefined): "development" | "production" {
-  return value === "development" || value === "dev" ? "development" : "production";
-}
-
 const dateInputStyle = {
   width: "100%",
   minWidth: 0,
@@ -686,10 +682,8 @@ export function App() {
   const [keySearch, setKeySearch] = useState<string>("");
   const [keyPage, setKeyPage] = useState<number>(1);
   const [newKeyName, setNewKeyName] = useState<string>("");
-  const [newKeyEnvironment, setNewKeyEnvironment] = useState<string>("production");
   const [newKeyScopes, setNewKeyScopes] = useState<string[]>(DEFAULT_KEY_SCOPES);
   const [newKeyExpiresAt, setNewKeyExpiresAt] = useState<string>("");
-  const [newKeyIpAllowCidrs, setNewKeyIpAllowCidrs] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [playgroundModels, setPlaygroundModels] = useState<string[]>([]);
@@ -924,10 +918,8 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: newKeyName.trim() || null,
-          environment: normalizeKeyEnvironment(newKeyEnvironment),
           scopes: newKeyScopes,
           expires_at: newKeyExpiresAt || null,
-          ip_allow_cidrs: newKeyIpAllowCidrs,
         }),
       });
       setCreatedKey(String(data?.api_key ?? ""));
@@ -1048,10 +1040,8 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: next.name,
-          environment: normalizeKeyEnvironment(next.environment),
           scopes: next.scopes ?? null,
           expires_at: next.expires_at,
-          ip_allow_cidrs: next.ip_allow_cidrs ?? null,
         }),
       });
       await loadKeys();
@@ -1158,10 +1148,9 @@ export function App() {
       const prefix = k.key_prefix.toLowerCase();
       const suffix = (k.key_suffix ?? "").toLowerCase();
       const name = (k.name ?? "").toLowerCase();
-      const env = k.environment.toLowerCase();
       const tenant = (k.tenant_id ?? "").toLowerCase();
       const status = k.status.toLowerCase();
-      return id.includes(q) || prefix.includes(q) || suffix.includes(q) || name.includes(q) || env.includes(q) || tenant.includes(q) || status.includes(q);
+      return id.includes(q) || prefix.includes(q) || suffix.includes(q) || name.includes(q) || tenant.includes(q) || status.includes(q);
     });
   }, [keys, keySearch]);
 
@@ -1294,10 +1283,6 @@ export function App() {
               onChange={(e) => setNewKeyName(e.currentTarget.value)}
               style={{ flex: "1 1 180px", minWidth: 0 }}
             />
-            <select value={newKeyEnvironment} onChange={(e) => setNewKeyEnvironment(e.currentTarget.value)}>
-              <option value="production">线上环境</option>
-              <option value="development">开发环境</option>
-            </select>
             <div style={{ flex: "2 1 280px", minWidth: 0 }}>
               <ScopeMultiSelect
               value={newKeyScopes}
@@ -1309,13 +1294,6 @@ export function App() {
               onDraftChange={setNewKeyExpiresAt}
               onCommit={(value) => setNewKeyExpiresAt(value ?? "")}
               style={{ ...dateInputStyle, flex: "1 1 190px" }}
-            />
-            <input
-              type="text"
-              placeholder="IP CIDR 白名单"
-              value={newKeyIpAllowCidrs}
-              onChange={(e) => setNewKeyIpAllowCidrs(e.currentTarget.value)}
-              style={{ flex: "1 1 180px", minWidth: 0 }}
             />
             <button onClick={createKey}>创建密钥</button>
             <input
@@ -1378,18 +1356,6 @@ export function App() {
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, alignItems: "start" }}>
                   <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>环境</span>
-                    <select
-                      value={normalizeKeyEnvironment(k.environment)}
-                      onChange={(e) => updateKeyMetadata(k, { environment: e.currentTarget.value })}
-                      disabled={Boolean(k.revoked_at)}
-                    >
-                      <option value="production">线上环境</option>
-                      <option value="development">开发环境</option>
-                    </select>
-                  </label>
-
-                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
                     <span style={{ color: "#666", fontSize: 12 }}>RPM 限制</span>
                     <input
                       type="number"
@@ -1436,20 +1402,6 @@ export function App() {
                     />
                   </label>
 
-                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>IP 白名单</span>
-                    <input
-                      type="text"
-                      defaultValue={(k.ip_allow_cidrs ?? []).join(",")}
-                      placeholder="空表示不限"
-                      onBlur={(e) => {
-                        const cidrs = e.currentTarget.value.split(",").map((s) => s.trim()).filter(Boolean);
-                        updateKeyMetadata(k, { ip_allow_cidrs: cidrs });
-                      }}
-                      disabled={Boolean(k.revoked_at)}
-                      style={{ width: "100%", minWidth: 0 }}
-                    />
-                  </label>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12, color: "#444", fontSize: 13 }}>
