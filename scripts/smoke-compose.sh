@@ -4,6 +4,20 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:3004}"
 CONFIG_FILE="${CONFIG_FILE:-config/easyai.development.yaml}"
 
+retry_curl_json() {
+  local url="$1"
+  local attempts="${2:-30}"
+  local sleep_sec="${3:-1}"
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if curl -fsS "$url" | json; then
+      return 0
+    fi
+    sleep "$sleep_sec"
+  done
+  return 1
+}
+
 read_yaml_value() {
   local key="$1"
   awk -v key="$key" '
@@ -40,7 +54,7 @@ json() {
 }
 
 echo "[1/6] healthz"
-curl -fsS "$BASE_URL/healthz" | json
+retry_curl_json "$BASE_URL/healthz" 45 1
 
 echo "[2/6] docs"
 curl -fsS "$BASE_URL/openapi.json" | json
