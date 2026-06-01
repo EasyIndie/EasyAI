@@ -2,9 +2,9 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { sha256Hex } from "./crypto.js";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
-import { findActiveApiKeyByHash, findTenant } from "./db.js";
+import { findActiveApiKeyByHash, findTenant, markApiKeyUsed } from "./db.js";
 import type { RedisClient } from "./redis.js";
-import { ipAllowed } from "./net.js";
+import { ipAllowed, normalizeIp } from "./net.js";
 
 export type AuthContext = {
   principal: string;
@@ -12,6 +12,8 @@ export type AuthContext = {
   apiKeyHash?: string;
   apiKeyId?: number;
   rpmLimit?: number | null;
+  scopes?: string[] | null;
+  environment?: string;
   tenantId?: string | null;
   tenantRpmLimit?: number | null;
   tenantTpmLimit?: number | null;
@@ -36,6 +38,11 @@ function apiKeyFromHeaders(headers: Record<string, string | string[] | undefined
 export type OAuthVerifier = {
   verify: (token: string) => Promise<{ subject: string }>;
 };
+
+export function hasScope(auth: AuthContext, required: string): boolean {
+  if (!auth.scopes || auth.scopes.length === 0) return true;
+  return auth.scopes.includes(required) || auth.scopes.includes("*");
+}
 
 export function createOAuthVerifier(cfg: Config): OAuthVerifier | undefined {
   if (!cfg.authModes.has("oauth")) return;
@@ -111,6 +118,7 @@ export async function authenticate(
     const apiKeyHash = sha256Hex(tokenOrKey);
     const row = await findActiveApiKeyByHash(db, apiKeyHash);
     if (row) {
+      if (!ipAllowed(reqIp, row.ip_allow_cidrs)) throw new Error("unauthorized");
       let tenantRpmLimit: number | null | undefined;
       let tenantTpmLimit: number | null | undefined;
       let tenantDisabled: boolean | undefined;
@@ -142,12 +150,15 @@ export async function authenticate(
           }
         }
       }
+      await markApiKeyUsed(db, row.id, normalizeIp(reqIp));
       return {
         principal: `apikey:${apiKeyHash.slice(0, 12)}`,
         authMode: "apikey",
         apiKeyHash,
         apiKeyId: row.id,
         rpmLimit: row.rpm_limit,
+        scopes: row.scopes,
+        environment: row.environment,
         tenantId: row.tenant_id,
         tenantRpmLimit,
         tenantTpmLimit,

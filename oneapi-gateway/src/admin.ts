@@ -7,11 +7,15 @@ import {
   findTenant,
   deleteApiKey,
   deleteTenant,
+  getApiKeyUsage,
   insertApiKey,
   listApiKeys,
   listTenants,
   revokeApiKey,
+  scheduleApiKeyRevocation,
   unbindTenantKeys,
+  updateApiKeyAutoRevoke,
+  updateApiKeyMetadata,
   updateApiKeyRpm,
   updateApiKeyTenant,
   upsertTenant,
@@ -37,9 +41,42 @@ function apiKeyPrefix(rawKey: string): string {
   return rawKey.slice(0, 8);
 }
 
+function apiKeySuffix(rawKey: string): string {
+  return rawKey.slice(-6);
+}
+
 function generateApiKey(): string {
   const b = randomBytes(24).toString("base64url");
   return `sk-${b}`;
+}
+
+function parseStringList(value: unknown): string[] | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  return String(value)
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function parseNullableDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) throw new Error("invalid date");
+  return d.toISOString();
+}
+
+function normalizeApiKeyEnvironment(value: unknown): "development" | "production" {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (raw === "development" || raw === "dev") return "development";
+  return "production";
+}
+
+function keyStatus(k: { revoked_at: string | null; expires_at?: string | null; revocation_scheduled_at?: string | null }): string {
+  if (k.revoked_at) return "revoked";
+  if (k.expires_at && new Date(k.expires_at).getTime() <= Date.now()) return "expired";
+  if (k.revocation_scheduled_at) return "revoking";
+  return "active";
 }
 
 export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db, redis: RedisClient): Promise<void> {
@@ -52,9 +89,21 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
     return {
       keys: keys.map((k) => ({
         id: k.id,
+        name: k.name,
         key_prefix: k.key_prefix,
+        key_suffix: k.key_suffix,
+        masked_key: `${k.key_prefix}...${k.key_suffix ?? ""}`,
+        environment: k.environment,
+        scopes: k.scopes,
         created_at: k.created_at,
         revoked_at: k.revoked_at,
+        expires_at: k.expires_at,
+        last_used_at: k.last_used_at,
+        last_used_ip: k.last_used_ip,
+        revocation_scheduled_at: k.revocation_scheduled_at,
+        auto_revoke_after_unused_days: k.auto_revoke_after_unused_days,
+        ip_allow_cidrs: k.ip_allow_cidrs,
+        status: keyStatus(k),
         rpm_limit: k.rpm_limit,
         tenant_id: k.tenant_id,
       })),
@@ -66,11 +115,28 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
       reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
+    const body = (req.body ?? {}) as any;
+    let expiresAt: string | null;
+    try {
+      expiresAt = parseNullableDate(body.expires_at);
+    } catch {
+      return reply.status(400).send({ error: { message: "invalid expires_at", type: "invalid_request_error" } });
+    }
     const raw = generateApiKey();
     const hash = sha256Hex(raw);
     const prefix = apiKeyPrefix(raw);
-    const out = await insertApiKey(db, hash, prefix);
-    return { id: out.id, api_key: raw, key_prefix: prefix };
+    const suffix = apiKeySuffix(raw);
+    const out = await insertApiKey(db, {
+      keyHash: hash,
+      keyPrefix: prefix,
+      keySuffix: suffix,
+      name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
+      environment: normalizeApiKeyEnvironment(body.environment),
+      scopes: parseStringList(body.scopes),
+      expiresAt,
+      ipAllowCidrs: parseStringList(body.ip_allow_cidrs),
+    });
+    return { id: out.id, api_key: raw, key_prefix: prefix, key_suffix: suffix, masked_key: `${prefix}...${suffix}` };
   });
 
   app.post("/admin/api/keys/:id/revoke", async (req, reply) => {
@@ -80,8 +146,56 @@ export async function registerAdminApi(app: FastifyInstance, cfg: Config, db: Db
     }
     const id = Number((req.params as any).id);
     if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
-    await revokeApiKey(db, id);
+    const body = (req.body ?? {}) as any;
+    if (body.mode === "scheduled") {
+      const hours = Number(body.delay_hours);
+      if (!Number.isFinite(hours) || hours <= 0) return reply.status(400).send({ error: { message: "invalid delay_hours", type: "invalid_request_error" } });
+      await scheduleApiKeyRevocation(db, id, new Date(Date.now() + hours * 60 * 60 * 1000).toISOString());
+    } else if (body.mode === "unused") {
+      const days = Number(body.unused_days);
+      if (!Number.isFinite(days) || days <= 0) return reply.status(400).send({ error: { message: "invalid unused_days", type: "invalid_request_error" } });
+      await updateApiKeyAutoRevoke(db, id, Math.floor(days));
+    } else {
+      await revokeApiKey(db, id);
+    }
     return { ok: true };
+  });
+
+  app.patch("/admin/api/keys/:id", async (req, reply) => {
+    if (!requireAdminWrite(req, cfg)) {
+      reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    }
+    const id = Number((req.params as any).id);
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
+    const body = (req.body ?? {}) as any;
+    let expiresAt: string | null;
+    try {
+      expiresAt = parseNullableDate(body.expires_at);
+    } catch {
+      return reply.status(400).send({ error: { message: "invalid expires_at", type: "invalid_request_error" } });
+    }
+    await updateApiKeyMetadata(db, id, {
+      name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
+      environment: normalizeApiKeyEnvironment(body.environment),
+      scopes: parseStringList(body.scopes),
+      expiresAt,
+      ipAllowCidrs: parseStringList(body.ip_allow_cidrs),
+    });
+    return { ok: true };
+  });
+
+  app.get("/admin/api/keys/:id/usage", async (req, reply) => {
+    if (!requireAdmin(req, cfg)) {
+      reply.header("WWW-Authenticate", 'Basic realm="oneapi-dashboard"');
+      return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    }
+    const id = Number((req.params as any).id);
+    if (!Number.isFinite(id) || id <= 0) return reply.status(400).send({ error: { message: "invalid id", type: "invalid_request_error" } });
+    const q = req.query as any;
+    const sinceMinutes = Math.min(Math.max(Number(q.sinceMinutes ?? 1440), 1), 60 * 24 * 30);
+    const rows = await getApiKeyUsage(db, id, sinceMinutes);
+    return { rows };
   });
 
   app.delete("/admin/api/keys/:id", async (req, reply) => {

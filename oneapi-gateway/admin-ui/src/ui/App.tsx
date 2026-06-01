@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 type Tab = "usage" | "keys" | "tenants";
 
@@ -17,9 +18,21 @@ type UsageRow = {
 
 type ApiKeyRow = {
   id: number;
+  name: string | null;
   key_prefix: string;
+  key_suffix: string | null;
+  masked_key: string;
+  environment: string;
+  scopes: string[] | null;
   created_at: string;
   revoked_at: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+  revocation_scheduled_at: string | null;
+  auto_revoke_after_unused_days: number | null;
+  ip_allow_cidrs: string[] | null;
+  status: string;
   rpm_limit: number | null;
   tenant_id: string | null;
 };
@@ -154,6 +167,333 @@ async function fetchJson(url: string, init?: RequestInit) {
   return text ? JSON.parse(text) : null;
 }
 
+const SCOPE_OPTIONS = [
+  { value: "model:invoke", label: "模型调用" },
+  { value: "chat:read", label: "聊天读取" },
+  { value: "chat:write", label: "聊天写入" },
+  { value: "batch:read", label: "Batch 读取" },
+  { value: "batch:write", label: "Batch 写入" },
+  { value: "*", label: "全部权限" },
+];
+
+const DEFAULT_KEY_SCOPES = ["model:invoke", "chat:read", "chat:write", "batch:read", "batch:write"];
+
+function scopeDisplayName(scope: string): string {
+  return SCOPE_OPTIONS.find((opt) => opt.value === scope)?.label ?? scope;
+}
+
+function normalizeKeyEnvironment(value: string | null | undefined): "development" | "production" {
+  return value === "development" || value === "dev" ? "development" : "production";
+}
+
+const dateInputStyle = {
+  width: "100%",
+  minWidth: 0,
+  fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+  fontVariantNumeric: "tabular-nums",
+  letterSpacing: 0,
+} as const;
+
+function datePart(value: string | null | undefined): string {
+  if (!value) return "";
+  const raw = String(value);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}
+
+function timePart(value: string | null | undefined): string {
+  if (!value) return "00:00";
+  const raw = String(value);
+  const match = raw.match(/[T\s](\d{2}:\d{2})/);
+  return match?.[1] ?? "00:00";
+}
+
+function composeDateTimeForApi(date: string, time: string): string | null {
+  if (!date) return null;
+  return `${date}T${time || "00:00"}`;
+}
+
+type DateTimeInputProps = {
+  value?: string | null;
+  disabled?: boolean;
+  style?: CSSProperties;
+  onDraftChange?: (value: string) => void;
+  onCommit: (value: string | null) => void;
+};
+
+function DateTimeInput(props: DateTimeInputProps) {
+  const { value, disabled, style, onDraftChange, onCommit } = props;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [popover, setPopover] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [date, setDate] = useState(datePart(value));
+  const [time, setTime] = useState(timePart(value));
+  const label = date ? `${date} ${time || "00:00"}` : "选择过期时间";
+
+  useEffect(() => {
+    setDate(datePart(value));
+    setTime(timePart(value));
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function updatePopover() {
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const width = Math.min(280, window.innerWidth - 32);
+      const left = Math.min(Math.max(16, rect.left), window.innerWidth - width - 16);
+      const panelHeight = 188;
+      const belowTop = rect.bottom + 6;
+      const aboveTop = rect.top - panelHeight - 6;
+      const top = belowTop + panelHeight <= window.innerHeight || aboveTop < 16
+        ? Math.min(belowTop, window.innerHeight - panelHeight - 16)
+        : aboveTop;
+      setPopover({ top: Math.max(16, top), left, width });
+    }
+    updatePopover();
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const root = rootRef.current;
+      if (!root || root.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updatePopover);
+    window.addEventListener("scroll", updatePopover, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updatePopover);
+      window.removeEventListener("scroll", updatePopover, true);
+    };
+  }, [open]);
+
+  function commit(nextDate: string, nextTime: string) {
+    const normalized = composeDateTimeForApi(nextDate, nextTime);
+    onDraftChange?.(normalized ?? "");
+    onCommit(normalized);
+  }
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", minWidth: 0, ...style }}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!disabled) setOpen((v) => !v);
+        }}
+        disabled={disabled}
+        style={{
+          ...dateInputStyle,
+          boxSizing: "border-box",
+          minHeight: 34,
+          padding: "7px 10px",
+          border: "1px solid #d1d5db",
+          borderRadius: 4,
+          background: disabled ? "#f6f7f8" : "#fff",
+          color: date ? "#111" : "#666",
+          cursor: disabled ? "not-allowed" : "pointer",
+          textAlign: "left",
+        }}
+      >
+        {label}
+      </button>
+      {open && !disabled ? (
+        <div
+          style={{
+            position: "fixed",
+            top: popover?.top ?? 16,
+            left: popover?.left ?? 16,
+            zIndex: 1000,
+            width: popover?.width ?? 280,
+            padding: 10,
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            background: "#fff",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
+          }}
+        >
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ display: "grid", gap: 5 }}>
+              <span style={{ color: "#666", fontSize: 12 }}>日期</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => {
+                  const nextDate = e.currentTarget.value;
+                  setDate(nextDate);
+                  commit(nextDate, time);
+                }}
+                style={{ ...dateInputStyle, boxSizing: "border-box" }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 5 }}>
+              <span style={{ color: "#666", fontSize: 12 }}>时间</span>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => {
+                  const nextTime = e.currentTarget.value || "00:00";
+                  setTime(nextTime);
+                  commit(date, nextTime);
+                }}
+                disabled={!date}
+                style={{ ...dateInputStyle, boxSizing: "border-box" }}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 2 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDate("");
+                  setTime("00:00");
+                  onDraftChange?.("");
+                  onCommit(null);
+                  setOpen(false);
+                }}
+              >
+                清空
+              </button>
+              <button type="button" onClick={() => setOpen(false)}>
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type ScopeMultiSelectProps = {
+  value: string[];
+  disabled?: boolean;
+  onChange: (next: string[]) => void;
+};
+
+function ScopeMultiSelect(props: ScopeMultiSelectProps) {
+  const { value, disabled, onChange } = props;
+  const [open, setOpen] = useState(false);
+  const [popover, setPopover] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = new Set(value);
+  const label = value.length ? value.map(scopeDisplayName).join("、") : "全部权限";
+
+  useEffect(() => {
+    if (!open) return;
+    function updatePopover() {
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const width = Math.min(Math.max(rect.width, 280), window.innerWidth - 32);
+      const left = Math.min(Math.max(16, rect.left), window.innerWidth - width - 16);
+      const preferredHeight = 270;
+      const belowTop = rect.bottom + 6;
+      const belowSpace = window.innerHeight - belowTop - 16;
+      const aboveSpace = rect.top - 22;
+      const openUp = belowSpace < preferredHeight && aboveSpace > belowSpace;
+      const maxHeight = Math.max(160, Math.min(preferredHeight, openUp ? aboveSpace : belowSpace));
+      const top = openUp ? Math.max(16, rect.top - maxHeight - 6) : belowTop;
+      setPopover({ top, left, width, maxHeight });
+    }
+    updatePopover();
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const root = rootRef.current;
+      if (!root || root.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updatePopover);
+    window.addEventListener("scroll", updatePopover, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updatePopover);
+      window.removeEventListener("scroll", updatePopover, true);
+    };
+  }, [open]);
+
+  function toggle(scope: string) {
+    const next = new Set(selected);
+    if (scope === "*") {
+      onChange(selected.has("*") ? [] : ["*"]);
+      return;
+    }
+    next.delete("*");
+    if (next.has(scope)) next.delete(scope);
+    else next.add(scope);
+    onChange(Array.from(next));
+  }
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", width: "100%", minWidth: 0 }}>
+      <button
+        type="button"
+        style={{
+          boxSizing: "border-box",
+          width: "100%",
+          minHeight: 34,
+          padding: "7px 10px",
+          border: "1px solid #d1d5db",
+          borderRadius: 4,
+          background: disabled ? "#f6f7f8" : "#fff",
+          color: disabled ? "#777" : "#111",
+          cursor: disabled ? "not-allowed" : "pointer",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          textAlign: "left",
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          if (!disabled) setOpen((v) => !v);
+        }}
+        disabled={disabled}
+        title={label}
+      >
+        {label}
+      </button>
+      {open && !disabled ? (
+        <div
+          style={{
+            position: "fixed",
+            top: popover?.top ?? 16,
+            left: popover?.left ?? 16,
+            width: popover?.width ?? 280,
+            maxHeight: popover?.maxHeight ?? 270,
+            overflow: "auto",
+            zIndex: 1000,
+            padding: 8,
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            background: "#fff",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
+          }}
+        >
+          {SCOPE_OPTIONS.map((opt) => (
+            <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 4px", cursor: "pointer" }}>
+              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} />
+              <span>{opt.label}</span>
+              <code style={{ color: "#666" }}>{opt.value}</code>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type TenantPickerProps = {
   value: string | null;
   disabled: boolean;
@@ -164,7 +504,9 @@ type TenantPickerProps = {
 
 function TenantPicker(props: TenantPickerProps) {
   const { value, disabled, tenants, boundCountByTenant, onCommit } = props;
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [popover, setPopover] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const [q, setQ] = useState("");
   const [active, setActive] = useState<number>(-1);
 
@@ -177,8 +519,34 @@ function TenantPicker(props: TenantPickerProps) {
   const display = value ?? "";
   const bound = value ? boundCountByTenant.get(value) ?? 0 : 0;
 
+  useEffect(() => {
+    if (!open) return;
+    function updatePopover() {
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const width = Math.min(Math.max(rect.width, 260), window.innerWidth - 32);
+      const left = Math.min(Math.max(16, rect.left), window.innerWidth - width - 16);
+      const preferredHeight = 280;
+      const belowTop = rect.bottom + 6;
+      const belowSpace = window.innerHeight - belowTop - 16;
+      const aboveSpace = rect.top - 22;
+      const openUp = belowSpace < preferredHeight && aboveSpace > belowSpace;
+      const maxHeight = Math.max(140, Math.min(preferredHeight, openUp ? aboveSpace : belowSpace));
+      const top = openUp ? Math.max(16, rect.top - maxHeight - 6) : belowTop;
+      setPopover({ top, left, width, maxHeight });
+    }
+    updatePopover();
+    window.addEventListener("resize", updatePopover);
+    window.addEventListener("scroll", updatePopover, true);
+    return () => {
+      window.removeEventListener("resize", updatePopover);
+      window.removeEventListener("scroll", updatePopover, true);
+    };
+  }, [open]);
+
   return (
-    <div style={{ position: "relative", minWidth: 220 }}>
+    <div ref={rootRef} style={{ position: "relative", width: "100%", minWidth: 0 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
           type="text"
@@ -247,17 +615,16 @@ function TenantPicker(props: TenantPickerProps) {
       {open && !disabled ? (
         <div
           style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 6,
+            position: "fixed",
+            top: popover?.top ?? 16,
+            left: popover?.left ?? 16,
+            width: popover?.width ?? 260,
             background: "#fff",
             border: "1px solid #eee",
             borderRadius: 8,
             boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
-            zIndex: 10,
-            maxHeight: 280,
+            zIndex: 1000,
+            maxHeight: popover?.maxHeight ?? 280,
             overflow: "auto",
           }}
         >
@@ -318,6 +685,11 @@ export function App() {
   const [tenantPage, setTenantPage] = useState<number>(1);
   const [keySearch, setKeySearch] = useState<string>("");
   const [keyPage, setKeyPage] = useState<number>(1);
+  const [newKeyName, setNewKeyName] = useState<string>("");
+  const [newKeyEnvironment, setNewKeyEnvironment] = useState<string>("production");
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(DEFAULT_KEY_SCOPES);
+  const [newKeyExpiresAt, setNewKeyExpiresAt] = useState<string>("");
+  const [newKeyIpAllowCidrs, setNewKeyIpAllowCidrs] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [playgroundModels, setPlaygroundModels] = useState<string[]>([]);
@@ -547,8 +919,19 @@ export function App() {
   async function createKey() {
     setStatus("创建中...");
     try {
-      const data = await fetchJson("/admin/api/keys", { method: "POST" });
+      const data = await fetchJson("/admin/api/keys", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: newKeyName.trim() || null,
+          environment: normalizeKeyEnvironment(newKeyEnvironment),
+          scopes: newKeyScopes,
+          expires_at: newKeyExpiresAt || null,
+          ip_allow_cidrs: newKeyIpAllowCidrs,
+        }),
+      });
       setCreatedKey(String(data?.api_key ?? ""));
+      setNewKeyName("");
       await loadKeys();
       setStatus("成功");
     } catch (e: any) {
@@ -560,6 +943,50 @@ export function App() {
     setStatus("撤销中...");
     try {
       await fetchJson(`/admin/api/keys/${id}/revoke`, { method: "POST" });
+      await loadKeys();
+      setStatus("成功");
+    } catch (e: any) {
+      setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function scheduleRevokeKey(id: number) {
+    const raw = prompt("延迟撤销小时数，例如 24 或 168");
+    if (!raw) return;
+    const hours = Number(raw);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setStatus("请输入有效小时数");
+      return;
+    }
+    setStatus("设置中...");
+    try {
+      await fetchJson(`/admin/api/keys/${id}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "scheduled", delay_hours: hours }),
+      });
+      await loadKeys();
+      setStatus("成功");
+    } catch (e: any) {
+      setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function autoRevokeKey(id: number) {
+    const raw = prompt("连续多少天无调用后自动撤销，例如 7");
+    if (!raw) return;
+    const days = Number(raw);
+    if (!Number.isFinite(days) || days <= 0) {
+      setStatus("请输入有效天数");
+      return;
+    }
+    setStatus("设置中...");
+    try {
+      await fetchJson(`/admin/api/keys/${id}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "unused", unused_days: days }),
+      });
       await loadKeys();
       setStatus("成功");
     } catch (e: any) {
@@ -604,6 +1031,28 @@ export function App() {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tenant_id: tenantId }),
+      });
+      await loadKeys();
+      setStatus("成功");
+    } catch (e: any) {
+      setStatus(e?.message ?? "失败");
+    }
+  }
+
+  async function updateKeyMetadata(k: ApiKeyRow, patch: Partial<ApiKeyRow>) {
+    setStatus("保存中...");
+    try {
+      const next = { ...k, ...patch };
+      await fetchJson(`/admin/api/keys/${k.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: next.name,
+          environment: normalizeKeyEnvironment(next.environment),
+          scopes: next.scopes ?? null,
+          expires_at: next.expires_at,
+          ip_allow_cidrs: next.ip_allow_cidrs ?? null,
+        }),
       });
       await loadKeys();
       setStatus("成功");
@@ -707,9 +1156,12 @@ export function App() {
     return keys.filter((k) => {
       const id = String(k.id);
       const prefix = k.key_prefix.toLowerCase();
+      const suffix = (k.key_suffix ?? "").toLowerCase();
+      const name = (k.name ?? "").toLowerCase();
+      const env = k.environment.toLowerCase();
       const tenant = (k.tenant_id ?? "").toLowerCase();
-      const revoked = k.revoked_at ? "已撤销" : "";
-      return id.includes(q) || prefix.includes(q) || tenant.includes(q) || revoked.includes(q);
+      const status = k.status.toLowerCase();
+      return id.includes(q) || prefix.includes(q) || suffix.includes(q) || name.includes(q) || env.includes(q) || tenant.includes(q) || status.includes(q);
     });
   }, [keys, keySearch]);
 
@@ -724,7 +1176,9 @@ export function App() {
   return (
     <div style={{
       fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-      margin: 24,
+      margin: "clamp(12px, 3vw, 24px)",
+      maxWidth: "100%",
+      overflowX: "hidden",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ margin: 0 }}>OneAPI 管理台</h1>
@@ -732,7 +1186,7 @@ export function App() {
       </div>
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
         gap: 12,
         margin: "12px 0 18px",
       }}>
@@ -753,7 +1207,7 @@ export function App() {
           <strong style={{ wordBreak: "break-word" }}>{health?.upstreams?.join(", ") || "-"}</strong>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <button onClick={() => setTab("usage")} disabled={tab === "usage"}>
           用量统计
         </button>
@@ -832,7 +1286,37 @@ export function App() {
 
       {tab === "keys" ? (
         <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <input
+              type="text"
+              placeholder="名称，例如 prod-service"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.currentTarget.value)}
+              style={{ flex: "1 1 180px", minWidth: 0 }}
+            />
+            <select value={newKeyEnvironment} onChange={(e) => setNewKeyEnvironment(e.currentTarget.value)}>
+              <option value="production">线上环境</option>
+              <option value="development">开发环境</option>
+            </select>
+            <div style={{ flex: "2 1 280px", minWidth: 0 }}>
+              <ScopeMultiSelect
+              value={newKeyScopes}
+                onChange={setNewKeyScopes}
+              />
+            </div>
+            <DateTimeInput
+              value={newKeyExpiresAt}
+              onDraftChange={setNewKeyExpiresAt}
+              onCommit={(value) => setNewKeyExpiresAt(value ?? "")}
+              style={{ ...dateInputStyle, flex: "1 1 190px" }}
+            />
+            <input
+              type="text"
+              placeholder="IP CIDR 白名单"
+              value={newKeyIpAllowCidrs}
+              onChange={(e) => setNewKeyIpAllowCidrs(e.currentTarget.value)}
+              style={{ flex: "1 1 180px", minWidth: 0 }}
+            />
             <button onClick={createKey}>创建密钥</button>
             <input
               type="text"
@@ -842,12 +1326,12 @@ export function App() {
                 setKeySearch(e.currentTarget.value);
                 setKeyPage(1);
               }}
-              style={{ marginLeft: 10 }}
+              style={{ flex: "1 1 180px", minWidth: 0 }}
             />
             <button onClick={loadKeys}>刷新</button>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
             <button onClick={() => setKeyPage(Math.max(1, keyPageClamped - 1))} disabled={keyPageClamped <= 1}>
               上一页
             </button>
@@ -862,42 +1346,51 @@ export function App() {
           {createdKey ? (
             <div style={{ marginBottom: 12, padding: 12, background: "#f6f7f8", borderRadius: 8 }}>
               <div style={{ marginBottom: 6 }}>新建 API 密钥（仅展示一次）：</div>
-              <code>{createdKey}</code>
+              <code style={{ display: "block", overflowWrap: "anywhere", wordBreak: "break-word" }}>{createdKey}</code>
               <div style={{ marginTop: 10 }}>
                 <button onClick={() => setCreatedKey(null)}>关闭</button>
               </div>
             </div>
           ) : null}
 
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                {["ID", "前缀", "创建时间", "撤销时间", "租户", "RPM 限制", "操作"].map((h) => (
-                  <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {keyPageRows.map((k) => (
-                <tr key={k.id}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{k.id}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <code>{k.key_prefix}</code>
-                  </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{formatTime(k.created_at)}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{k.revoked_at ? formatTime(k.revoked_at) : ""}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <TenantPicker
-                      value={k.tenant_id}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 12 }}>
+            {keyPageRows.map((k) => (
+              <div key={k.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff", minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <input
+                      type="text"
+                      placeholder="未命名"
+                      defaultValue={k.name ?? ""}
+                      onBlur={(e) => updateKeyMetadata(k, { name: e.currentTarget.value.trim() || null })}
                       disabled={Boolean(k.revoked_at)}
-                      tenants={tenantOptions}
-                      boundCountByTenant={boundKeyCountByTenant}
-                      onCommit={(tenantId) => updateKeyTenant(k.id, tenantId)}
+                      style={{ display: "block", marginBottom: 6, width: "min(100%, 260px)" }}
                     />
-                  </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                    <code style={{ display: "block", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                      {k.masked_key || `${k.key_prefix}...${k.key_suffix ?? ""}`}
+                    </code>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ color: "#666", fontSize: 12 }}>#{k.id}</div>
+                    <code>{k.status}</code>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, alignItems: "start" }}>
+                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>环境</span>
+                    <select
+                      value={normalizeKeyEnvironment(k.environment)}
+                      onChange={(e) => updateKeyMetadata(k, { environment: e.currentTarget.value })}
+                      disabled={Boolean(k.revoked_at)}
+                    >
+                      <option value="production">线上环境</option>
+                      <option value="development">开发环境</option>
+                    </select>
+                  </label>
+
+                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>RPM 限制</span>
                     <input
                       type="number"
                       min={1}
@@ -909,41 +1402,116 @@ export function App() {
                       }}
                       disabled={Boolean(k.revoked_at)}
                     />
-                  </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <button onClick={() => revokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
-                      撤销
-                    </button>
-                    <button
-                      style={{ marginLeft: 8 }}
-                      onClick={() => {
-                        if (k.revoked_at) return;
-                        if (!k.tenant_id) return;
-                        if (!confirm("确认解绑该密钥当前绑定的租户吗？")) return;
-                        updateKeyTenant(k.id, null);
+                  </label>
+
+                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>过期时间</span>
+                    <DateTimeInput
+                      value={k.expires_at ? k.expires_at.slice(0, 16) : ""}
+                      onCommit={(value) => updateKeyMetadata(k, { expires_at: value })}
+                      disabled={Boolean(k.revoked_at)}
+                      style={dateInputStyle}
+                    />
+                  </label>
+
+                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>租户</span>
+                    <TenantPicker
+                      value={k.tenant_id}
+                      disabled={Boolean(k.revoked_at)}
+                      tenants={tenantOptions}
+                      boundCountByTenant={boundKeyCountByTenant}
+                      onCommit={(tenantId) => updateKeyTenant(k.id, tenantId)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 }}>
+                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>Scopes</span>
+                    <ScopeMultiSelect
+                      value={k.scopes ?? []}
+                      disabled={Boolean(k.revoked_at)}
+                      onChange={(scopes) => updateKeyMetadata(k, { scopes })}
+                    />
+                  </label>
+
+                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                    <span style={{ color: "#666", fontSize: 12 }}>IP 白名单</span>
+                    <input
+                      type="text"
+                      defaultValue={(k.ip_allow_cidrs ?? []).join(",")}
+                      placeholder="空表示不限"
+                      onBlur={(e) => {
+                        const cidrs = e.currentTarget.value.split(",").map((s) => s.trim()).filter(Boolean);
+                        updateKeyMetadata(k, { ip_allow_cidrs: cidrs });
                       }}
-                      disabled={Boolean(k.revoked_at) || !k.tenant_id}
-                    >
-                      解绑
-                    </button>
-                    <button
-                      style={{ marginLeft: 8 }}
-                      onClick={() => {
-                        if (!confirm("确认删除该 API 密钥吗？")) return;
-                        const force = !k.revoked_at;
-                        if (force) {
-                          if (!confirm("该密钥尚未撤销，是否仍要强制删除？")) return;
-                        }
-                        deleteKey(k.id, force);
-                      }}
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      disabled={Boolean(k.revoked_at)}
+                      style={{ width: "100%", minWidth: 0 }}
+                    />
+                  </label>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12, color: "#444", fontSize: 13 }}>
+                  <div>
+                    <div style={{ color: "#666", fontSize: 12 }}>创建时间</div>
+                    <div>{formatTime(k.created_at)}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "#666", fontSize: 12 }}>最后使用</div>
+                    <div style={{ overflowWrap: "anywhere" }}>{k.last_used_at ? `${formatTime(k.last_used_at)} ${k.last_used_ip ?? ""}` : "尚无调用"}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "#666", fontSize: 12 }}>撤销策略</div>
+                    <div>
+                      {k.revoked_at
+                        ? `已撤销 ${formatTime(k.revoked_at)}`
+                        : k.revocation_scheduled_at
+                          ? `计划撤销 ${formatTime(k.revocation_scheduled_at)}`
+                          : k.auto_revoke_after_unused_days
+                            ? `${k.auto_revoke_after_unused_days} 天无调用自动撤销`
+                            : "-"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+                  <button onClick={() => revokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                    立即撤销
+                  </button>
+                  <button onClick={() => scheduleRevokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                    延迟撤销
+                  </button>
+                  <button onClick={() => autoRevokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                    闲置撤销
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (k.revoked_at) return;
+                      if (!k.tenant_id) return;
+                      if (!confirm("确认解绑该密钥当前绑定的租户吗？")) return;
+                      updateKeyTenant(k.id, null);
+                    }}
+                    disabled={Boolean(k.revoked_at) || !k.tenant_id}
+                  >
+                    解绑
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!confirm("确认删除该 API 密钥吗？")) return;
+                      const force = !k.revoked_at;
+                      if (force) {
+                        if (!confirm("该密钥尚未撤销，是否仍要强制删除？")) return;
+                      }
+                      deleteKey(k.id, force);
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

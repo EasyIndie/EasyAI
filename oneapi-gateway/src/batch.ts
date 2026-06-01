@@ -4,7 +4,7 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { createBatch, getBatch, insertBatchItem, listBatchItems } from "./db.js";
 import type { RedisClient } from "./redis.js";
-import type { AuthContext } from "./auth.js";
+import { hasScope, type AuthContext } from "./auth.js";
 
 type BatchRequestItem = {
   endpoint?: string;
@@ -34,6 +34,7 @@ export async function registerBatchRoutes(
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
+    if (!hasScope(auth, "batch:write")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const body = (req.body ?? {}) as any;
     const items = (body.requests ?? body.items) as BatchRequestItem[] | undefined;
@@ -66,6 +67,7 @@ export async function registerBatchRoutes(
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
+    if (!hasScope(auth, "batch:read")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const batchId = String((req.params as any).batchId ?? "").trim();
     const row = await getBatch(db, batchId);
@@ -81,6 +83,7 @@ export async function registerBatchRoutes(
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
+    if (!hasScope(auth, "batch:read")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const batchId = String((req.params as any).batchId ?? "").trim();
     const row = await getBatch(db, batchId);

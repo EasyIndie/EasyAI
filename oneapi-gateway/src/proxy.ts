@@ -14,7 +14,7 @@ import {
   ttftDurationSeconds,
   tpsTokensPerSecond,
 } from "./metrics.js";
-import type { AuthContext } from "./auth.js";
+import { hasScope, type AuthContext } from "./auth.js";
 import { UpstreamPool } from "./upstreams.js";
 import { checkInputGuardrails, maskPiiJson, maskPiiText } from "./guardrails.js";
 
@@ -120,6 +120,25 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
 
       try {
         auth = await deps.authenticateRequest(req.headers as any, (req as any).ip);
+        if (!hasScope(auth, "model:invoke")) {
+          status = 403;
+          httpRequestsTotal.labels(route, req.method, String(status)).inc();
+          timer();
+          await insertUsageEvent(deps.db, {
+            principal: auth.principal,
+            apiKeyId: auth.apiKeyId,
+            apiKeyHash: auth.apiKeyHash,
+            tenantId: auth.tenantId,
+            authMode: auth.authMode,
+            endpoint: route,
+            method: req.method,
+            status,
+            latencyMs: Date.now() - startMs,
+            cached: false,
+            error: "scope_denied",
+          });
+          return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
+        }
         let body: unknown = req.body;
         if (body && typeof body === "object") {
           const m = (body as any).model;

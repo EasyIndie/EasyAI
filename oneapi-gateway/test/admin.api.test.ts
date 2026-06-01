@@ -40,7 +40,9 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
   const db: any = {
     pool: {
       query: async (sql: string) => {
-        if (sql.includes("select id, key_hash")) return { rows: [] };
+        if (sql.includes("update api_keys") && sql.includes("revocation_scheduled_at")) return { rows: [], rowCount: 0 };
+        if (sql.includes("update api_keys") && sql.includes("auto_revoke_after_unused_days")) return { rows: [], rowCount: 0 };
+        if (sql.replace(/\s+/g, " ").includes("select id, key_hash")) return { rows: [] };
         if (sql.includes("insert into api_keys")) return { rows: [{ id: 1 }] };
         throw new Error(`unexpected query: ${sql}`);
       },
@@ -71,6 +73,7 @@ test("admin api: write endpoints require x-oneapi-admin-action", async () => {
   const j2 = r2.json() as any;
   assert.equal(j2.id, 1);
   assert.ok(String(j2.api_key).startsWith("sk-"));
+  assert.ok(String(j2.masked_key).includes("..."));
 
   const r3 = await app.inject({
     method: "GET",
@@ -111,7 +114,9 @@ test("admin api: accepts signed admin session cookie", async () => {
   const db: any = {
     pool: {
       query: async (sql: string) => {
-        if (sql.includes("select id, key_hash")) return { rows: [] };
+        if (sql.includes("update api_keys") && sql.includes("revocation_scheduled_at")) return { rows: [], rowCount: 0 };
+        if (sql.includes("update api_keys") && sql.includes("auto_revoke_after_unused_days")) return { rows: [], rowCount: 0 };
+        if (sql.replace(/\s+/g, " ").includes("select id, key_hash")) return { rows: [] };
         throw new Error(`unexpected query: ${sql}`);
       },
     },

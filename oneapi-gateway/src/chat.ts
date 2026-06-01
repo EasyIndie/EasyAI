@@ -6,7 +6,7 @@ import type { Db, ConversationRow } from "./db.js";
 import { createConversation, listConversations, getConversation, updateConversationTitle, touchConversation, deleteConversation, insertMessage, listMessages } from "./db.js";
 import type { RedisClient } from "./redis.js";
 import type { AuthContext, OAuthVerifier } from "./auth.js";
-import { authenticate } from "./auth.js";
+import { authenticate, hasScope } from "./auth.js";
 
 async function authenticateRequest(cfg: Config, oauth: OAuthVerifier | undefined, headers: Record<string, any>, db: Db, redis: RedisClient, reqIp?: string): Promise<AuthContext> {
   return authenticate(cfg, oauth, headers, db, redis, reqIp);
@@ -59,6 +59,11 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
     if (!p.startsWith("/chat-api/")) return;
     try {
       const auth = await authenticateRequest(cfg, oauth, req.headers as any, db, redis, (req as any).ip);
+      const method = req.method.toUpperCase();
+      const required = p === "/chat-api/models" ? "model:invoke" : method === "GET" ? "chat:read" : "chat:write";
+      if (!hasScope(auth, required)) {
+        return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
+      }
       (req as any).authContext = auth;
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });

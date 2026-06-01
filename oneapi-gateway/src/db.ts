@@ -83,10 +83,42 @@ async function migrate(pool: pg.Pool): Promise<void> {
       if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='tenant_id') then
         alter table api_keys add column tenant_id text;
       end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='name') then
+        alter table api_keys add column name text;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='key_suffix') then
+        alter table api_keys add column key_suffix text;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='environment') then
+        alter table api_keys add column environment text not null default 'production';
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='scopes') then
+        alter table api_keys add column scopes text[];
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='expires_at') then
+        alter table api_keys add column expires_at timestamptz;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='last_used_at') then
+        alter table api_keys add column last_used_at timestamptz;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='last_used_ip') then
+        alter table api_keys add column last_used_ip text;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='revocation_scheduled_at') then
+        alter table api_keys add column revocation_scheduled_at timestamptz;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='auto_revoke_after_unused_days') then
+        alter table api_keys add column auto_revoke_after_unused_days int;
+      end if;
+      if not exists (select 1 from information_schema.columns where table_name='api_keys' and column_name='ip_allow_cidrs') then
+        alter table api_keys add column ip_allow_cidrs text[];
+      end if;
     end $$;
   `);
   await pool.query(`create index if not exists api_keys_revoked_idx on api_keys(revoked_at);`);
   await pool.query(`create index if not exists api_keys_tenant_idx on api_keys(tenant_id);`);
+  await pool.query(`create index if not exists api_keys_prefix_idx on api_keys(key_prefix);`);
+  await pool.query(`create index if not exists api_keys_last_used_idx on api_keys(last_used_at desc);`);
 
   await pool.query(`
     update usage_events ue
@@ -237,6 +269,24 @@ export type UsageSummaryRow = {
   total_tokens: number | null;
 };
 
+async function processDueApiKeyRevocations(db: Db): Promise<void> {
+  await db.pool.query(`
+    update api_keys
+    set revoked_at = now()
+    where revoked_at is null
+      and revocation_scheduled_at is not null
+      and revocation_scheduled_at <= now()
+  `);
+  await db.pool.query(`
+    update api_keys
+    set revoked_at = now()
+    where revoked_at is null
+      and auto_revoke_after_unused_days is not null
+      and auto_revoke_after_unused_days > 0
+      and coalesce(last_used_at, created_at) <= now() - (auto_revoke_after_unused_days::text || ' days')::interval
+  `);
+}
+
 export async function getUsageSummary(db: Db, sinceMinutes: number): Promise<UsageSummaryRow[]> {
   const res = await db.pool.query(
     `
@@ -267,16 +317,31 @@ export type ApiKeyRow = {
   id: number;
   key_hash: string;
   key_prefix: string;
+  key_suffix: string | null;
+  name: string | null;
+  environment: string;
+  scopes: string[] | null;
   created_at: string;
   revoked_at: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+  revocation_scheduled_at: string | null;
+  auto_revoke_after_unused_days: number | null;
+  ip_allow_cidrs: string[] | null;
   rpm_limit: number | null;
   tenant_id: string | null;
 };
 
 export async function listApiKeys(db: Db): Promise<ApiKeyRow[]> {
+  await processDueApiKeyRevocations(db);
   const res = await db.pool.query(
     `
-    select id, key_hash, key_prefix, created_at::text, revoked_at::text, rpm_limit, tenant_id
+    select
+      id, key_hash, key_prefix, key_suffix, name, environment, scopes,
+      created_at::text, revoked_at::text, expires_at::text, last_used_at::text, last_used_ip,
+      revocation_scheduled_at::text, auto_revoke_after_unused_days, ip_allow_cidrs,
+      rpm_limit, tenant_id
     from api_keys
     order by id desc
     limit 500
@@ -285,20 +350,48 @@ export async function listApiKeys(db: Db): Promise<ApiKeyRow[]> {
   return res.rows;
 }
 
-export async function insertApiKey(db: Db, keyHash: string, keyPrefix: string): Promise<{ id: number }> {
+export type NewApiKeyInput = {
+  keyHash: string;
+  keyPrefix: string;
+  keySuffix: string;
+  name?: string | null;
+  environment?: string | null;
+  scopes?: string[] | null;
+  expiresAt?: string | null;
+  ipAllowCidrs?: string[] | null;
+};
+
+export async function insertApiKey(db: Db, input: NewApiKeyInput): Promise<{ id: number }> {
   const res = await db.pool.query(
     `
-    insert into api_keys (key_hash, key_prefix)
-    values ($1, $2)
+    insert into api_keys (key_hash, key_prefix, key_suffix, name, environment, scopes, expires_at, ip_allow_cidrs)
+    values ($1, $2, $3, $4, $5, $6, $7, $8)
     returning id
   `,
-    [keyHash, keyPrefix],
+    [
+      input.keyHash,
+      input.keyPrefix,
+      input.keySuffix,
+      input.name ?? null,
+      input.environment || "production",
+      input.scopes && input.scopes.length ? input.scopes : null,
+      input.expiresAt ?? null,
+      input.ipAllowCidrs && input.ipAllowCidrs.length ? input.ipAllowCidrs : null,
+    ],
   );
   return { id: Number(res.rows[0]?.id) };
 }
 
 export async function revokeApiKey(db: Db, id: number): Promise<void> {
-  await db.pool.query(`update api_keys set revoked_at = now() where id = $1 and revoked_at is null`, [id]);
+  await db.pool.query(`update api_keys set revoked_at = now(), revocation_scheduled_at = null where id = $1 and revoked_at is null`, [id]);
+}
+
+export async function scheduleApiKeyRevocation(db: Db, id: number, scheduledAt: string): Promise<void> {
+  await db.pool.query(`update api_keys set revocation_scheduled_at = $2 where id = $1 and revoked_at is null`, [id, scheduledAt]);
+}
+
+export async function updateApiKeyAutoRevoke(db: Db, id: number, unusedDays: number | null): Promise<void> {
+  await db.pool.query(`update api_keys set auto_revoke_after_unused_days = $2 where id = $1 and revoked_at is null`, [id, unusedDays]);
 }
 
 export async function updateApiKeyRpm(db: Db, id: number, rpmLimit: number | null): Promise<void> {
@@ -309,12 +402,59 @@ export async function updateApiKeyTenant(db: Db, id: number, tenantId: string | 
   await db.pool.query(`update api_keys set tenant_id = $2 where id = $1`, [id, tenantId]);
 }
 
+export type ApiKeyPatch = {
+  name?: string | null;
+  environment?: string;
+  scopes?: string[] | null;
+  expiresAt?: string | null;
+  ipAllowCidrs?: string[] | null;
+};
+
+export async function updateApiKeyMetadata(db: Db, id: number, patch: ApiKeyPatch): Promise<void> {
+  await db.pool.query(
+    `
+    update api_keys
+    set
+      name = $2,
+      environment = $3,
+      scopes = $4,
+      expires_at = $5,
+      ip_allow_cidrs = $6
+    where id = $1
+  `,
+    [
+      id,
+      patch.name ?? null,
+      patch.environment || "production",
+      patch.scopes && patch.scopes.length ? patch.scopes : null,
+      patch.expiresAt ?? null,
+      patch.ipAllowCidrs && patch.ipAllowCidrs.length ? patch.ipAllowCidrs : null,
+    ],
+  );
+}
+
 export async function findActiveApiKeyByHash(
   db: Db,
   keyHash: string,
-): Promise<{ id: number; rpm_limit: number | null; tenant_id: string | null } | undefined> {
+): Promise<{
+  id: number;
+  rpm_limit: number | null;
+  tenant_id: string | null;
+  scopes: string[] | null;
+  environment: string;
+  ip_allow_cidrs: string[] | null;
+} | undefined> {
+  await processDueApiKeyRevocations(db);
   const res = await db.pool.query(
-    `select id, rpm_limit, tenant_id from api_keys where key_hash = $1 and revoked_at is null limit 1`,
+    `
+    select id, rpm_limit, tenant_id, scopes, environment, ip_allow_cidrs
+    from api_keys
+    where key_hash = $1
+      and revoked_at is null
+      and (expires_at is null or expires_at > now())
+      and (revocation_scheduled_at is null or revocation_scheduled_at > now())
+    limit 1
+  `,
     [keyHash],
   );
   if (!res.rows?.length) return;
@@ -322,7 +462,41 @@ export async function findActiveApiKeyByHash(
     id: Number(res.rows[0].id),
     rpm_limit: res.rows[0].rpm_limit ?? null,
     tenant_id: res.rows[0].tenant_id ?? null,
+    scopes: res.rows[0].scopes ?? null,
+    environment: res.rows[0].environment ?? "production",
+    ip_allow_cidrs: res.rows[0].ip_allow_cidrs ?? null,
   };
+}
+
+export async function markApiKeyUsed(db: Db, id: number, ip?: string): Promise<void> {
+  await db.pool.query(`update api_keys set last_used_at = now(), last_used_ip = $2 where id = $1`, [id, ip ?? null]);
+}
+
+export type ApiKeyUsageRow = {
+  day: string;
+  requests: number;
+  errors: number;
+  total_tokens: number | null;
+};
+
+export async function getApiKeyUsage(db: Db, id: number, sinceMinutes: number): Promise<ApiKeyUsageRow[]> {
+  const res = await db.pool.query(
+    `
+    select
+      date_trunc('hour', ts)::text as day,
+      count(*)::int as requests,
+      sum(case when status >= 400 then 1 else 0 end)::int as errors,
+      sum(total_tokens)::bigint as total_tokens
+    from usage_events
+    where api_key_id = $1
+      and ts >= now() - ($2::text || ' minutes')::interval
+    group by 1
+    order by 1 desc
+    limit 200
+  `,
+    [id, String(sinceMinutes)],
+  );
+  return res.rows;
 }
 
 export type TenantRow = {
