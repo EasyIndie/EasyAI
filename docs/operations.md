@@ -6,7 +6,7 @@
 
 ### 1.1 关键配置项（速查）
 
-**统一配置（在 `config/easyai.yaml` 中）**
+**统一配置（在 `config/easyai.development.yaml` 中）**
 - `app.env` / `app.port` / `app.log_level`
 - `secrets.admin_password`：Dashboard 与 `/admin/api/*` 的管理密码，用户名默认 `admin`
 - `secrets.api_keys`：客户端调用 `/v1/*` 使用的 API Key
@@ -31,7 +31,7 @@ curl -sS http://localhost:3004/metrics | head
 ### 1.2.1 发布前安全检查
 
 ```bash
-grep -E 'REPLACE_WITH_|dev-key|dev-internal|postgres_password: "oneapi"' config/easyai.yaml
+grep -E 'REPLACE_WITH_|dev-key|dev-internal|postgres_password: "oneapi"' config/easyai.development.yaml
 docker compose config | grep -E '5432:5432|6379:6379|4000:4000|11434:11434' && echo "unexpected exposed port"
 ```
 
@@ -69,7 +69,7 @@ COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/restore-pos
 ./scripts/smoke-compose.sh
 ```
 
-脚本默认从 `config/easyai.yaml` 读取 API Key 和后台账号；也可以临时覆盖连接参数：
+脚本默认从 `config/easyai.development.yaml` 读取 API Key 和后台账号；也可以临时覆盖连接参数：
 
 ```bash
 BASE_URL=http://localhost:3004 ./scripts/smoke-compose.sh
@@ -206,10 +206,10 @@ docker compose logs --tail=200 batch_worker
 ```
 
 - 常见现象与含义：
-  - `model not allowed` (400)：请求的模型名不在 `config/easyai.yaml` 的 `models` 中。
+  - `model not allowed` (400)：请求的模型名不在 `config/easyai.development.yaml` 的 `models` 中。
   - `Model not found` (404)：模型名称正确，但底层的 Ollama 未拉取该模型（执行 `ollama pull`）。
   - `Upstream connection error` (502)：Ollama 容器未启动或网络不通。
-  - `Upstream timeout` (504)：模型加载或生成耗时过长，超出 `config/easyai.yaml` 中配置的超时时间。
+  - `Upstream timeout` (504)：模型加载或生成耗时过长，超出 `config/easyai.development.yaml` 中配置的超时时间。
   - `Insufficient memory` (507)：宿主机/容器可用内存不足以加载该模型（LiteLLM 捕获后会在后台尝试自愈清理）。
   - `Client Disconnected` (499)：客户端（如浏览器/curl）主动中断了请求，通常表现为流式生成意外停止。
 

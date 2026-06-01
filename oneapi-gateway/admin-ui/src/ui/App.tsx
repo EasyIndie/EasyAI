@@ -35,6 +35,7 @@ type TenantRow = {
 type HealthStatus = {
   ok: boolean;
   service: string;
+  appEnv?: string;
   upstreams: string[];
   authModes: string[];
   cacheEnabled: boolean;
@@ -93,6 +94,48 @@ function extractStreamChunkText(payload: any): string {
   const message = payload?.choices?.[0]?.message;
   if (typeof message?.content === "string") return message.content;
   return "";
+}
+
+function getDeploymentLabel(appEnv?: string | null): { text: string; tone: string } {
+  if (appEnv === undefined) return { text: "环境检测中", tone: "#6b7280" };
+  if (appEnv === null) return { text: "环境未知", tone: "#6b7280" };
+  return appEnv === "production"
+    ? { text: "线上环境", tone: "#137333" }
+    : { text: "开发环境", tone: "#b45309" };
+}
+
+function DeploymentBadge(props: { appEnv?: string }) {
+  const { text, tone } = getDeploymentLabel(props.appEnv);
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 999,
+        background: "#fff",
+        border: `1px solid ${tone}33`,
+        boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+        color: tone,
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: tone,
+          flexShrink: 0,
+        }}
+      />
+      <span>{text}</span>
+    </div>
+  );
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -289,7 +332,7 @@ export function App() {
   const [playgroundRaw, setPlaygroundRaw] = useState<string>("");
   const [playgroundUsage, setPlaygroundUsage] = useState<string>("");
   const [playgroundLatencyMs, setPlaygroundLatencyMs] = useState<number | null>(null);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null | undefined>(undefined);
 
   function stopPlayground() {
     const controller = playgroundAbortRef.current;
@@ -679,8 +722,14 @@ export function App() {
   }, [filteredKeys, keyPageClamped]);
 
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", margin: 24 }}>
-      <h1>OneAPI 管理台</h1>
+    <div style={{
+      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      margin: 24,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <h1 style={{ margin: 0 }}>OneAPI 管理台</h1>
+        <DeploymentBadge appEnv={health?.appEnv} />
+      </div>
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",

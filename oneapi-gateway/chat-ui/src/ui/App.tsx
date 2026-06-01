@@ -22,6 +22,15 @@ type Message = {
 
 type ViewMode = "chat" | "test";
 
+type HealthStatus = {
+  ok: boolean;
+  service: string;
+  appEnv?: string;
+  upstreams?: string[];
+  authModes?: string[];
+  cacheEnabled?: boolean;
+};
+
 const LS_KEY = "easyai_chat_api_key";
 
 function getStoredKey(): string | null {
@@ -147,6 +156,48 @@ function extractStreamChunkText(payload: any): string {
   return "";
 }
 
+function getDeploymentLabel(appEnv?: string | null): { text: string; tone: string } {
+  if (appEnv === undefined) return { text: "环境检测中", tone: "#6b7280" };
+  if (appEnv === null) return { text: "环境未知", tone: "#6b7280" };
+  return appEnv === "production"
+    ? { text: "线上环境", tone: "#137333" }
+    : { text: "开发环境", tone: "#b45309" };
+}
+
+function DeploymentBadge(props: { appEnv?: string }) {
+  const { text, tone } = getDeploymentLabel(props.appEnv);
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 999,
+        background: "#fff",
+        border: `1px solid ${tone}33`,
+        boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+        color: tone,
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: tone,
+          flexShrink: 0,
+        }}
+      />
+      <span>{text}</span>
+    </div>
+  );
+}
+
 export function App() {
   const [apiKey, setApiKey] = useState<string | null>(getStoredKey);
   const [keyInput, setKeyInput] = useState(getStoredKey() ?? "");
@@ -172,6 +223,7 @@ export function App() {
   const [testRaw, setTestRaw] = useState("");
   const [testUsage, setTestUsage] = useState("");
   const [testLatencyMs, setTestLatencyMs] = useState<number | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null | undefined>(undefined);
   const [convLoading, setConvLoading] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
@@ -215,6 +267,17 @@ export function App() {
       setModels(list);
       if (list.length > 0 && !selectedModel) setSelectedModel(list[0]!);
     } catch {}
+  }, []);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await fetch("/healthz", { headers: { accept: "application/json" } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(String(res.status));
+      setHealth(data as HealthStatus);
+    } catch {
+      setHealth(null);
+    }
   }, []);
 
   const loadConversations = useCallback(async () => {
@@ -365,6 +428,10 @@ export function App() {
       loadModels();
     }
   }, [apiKey, loadConversations, loadModels]);
+
+  useEffect(() => {
+    loadHealth();
+  }, [loadHealth]);
 
   useEffect(() => {
     if (currentId) {
@@ -760,7 +827,10 @@ export function App() {
           width: 400,
           maxWidth: "90vw",
         }}>
-          <h1 style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 700 }}>EasyAI Chat</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px" }}>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>EasyAI Chat</h1>
+            <DeploymentBadge appEnv={health?.appEnv} />
+          </div>
           <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>请输入你的 API 密钥开始使用</p>
           <input
             type="password"
@@ -811,7 +881,7 @@ export function App() {
   return (
     <div style={{
       display: "flex",
-      height: "100vh",
+      minHeight: "100vh",
       fontFamily: "system-ui, -apple-system, sans-serif",
       color: "#1a1a1a",
     }}>
@@ -825,7 +895,10 @@ export function App() {
         flexDirection: "column",
       }}>
         <div style={{ padding: 16, borderBottom: "1px solid #e8e8e8" }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>EasyAI Chat</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>EasyAI Chat</h2>
+            <DeploymentBadge appEnv={health?.appEnv} />
+          </div>
           <button
             onClick={handleNewConversation}
             disabled={isStreaming}
@@ -1089,7 +1162,7 @@ export function App() {
           )}
 
           {status && (
-            <span style={{ fontSize: 12, color: "#999", marginLeft: "auto" }}>{status}</span>
+            <span style={{ fontSize: 12, color: "#666", marginLeft: "auto" }}>{status}</span>
           )}
           {currentConv && (
             <button

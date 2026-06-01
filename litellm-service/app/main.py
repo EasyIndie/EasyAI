@@ -75,7 +75,7 @@ def _validate_config(cfg: Dict[str, Any]) -> None:
 def _resolve_config_path(path: str) -> str:
     if Path(path).exists():
         return path
-    for fallback in (Path("config/easyai.yaml"), Path("../config/easyai.yaml")):
+    for fallback in (Path("config/easyai.development.yaml"), Path("../config/easyai.development.yaml")):
         if fallback.exists():
             return str(fallback)
     return path

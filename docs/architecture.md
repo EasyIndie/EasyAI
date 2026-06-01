@@ -64,7 +64,7 @@ flowchart LR
 ## 配置项
 
 ### 统一配置
-- 配置文件: [config/easyai.yaml](../config/easyai.yaml)
+- 配置文件: [config/easyai.development.yaml](../config/easyai.development.yaml)
 - 最小参数:
   - `app.env`, `app.port`, `app.log_level`
   - `secrets.admin_password`, `secrets.api_keys`, `secrets.internal_token`, `secrets.postgres_password`
@@ -73,7 +73,7 @@ flowchart LR
 
 
 ### 组合运行参数
-- 组合模式配置: 已合并到 `config/easyai.yaml` 和 `docker-compose.yml`
+- 组合模式配置: 已合并到 `config/easyai.development.yaml` 和 `docker-compose.yml`
 - 组合部署入口: [docker-compose.yml](../docker-compose.yml)
 
 ## 可观测性

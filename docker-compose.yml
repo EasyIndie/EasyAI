@@ -28,7 +28,7 @@ services:
       context: ./litellm-service
     restart: unless-stopped
     volumes:
-      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
+      - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - ollama
 
@@ -39,7 +39,7 @@ services:
     ports:
       - "3004:3003"
     volumes:
-      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
+      - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - redis
       - postgres
@@ -50,7 +50,7 @@ services:
       context: ./batch-worker
     restart: unless-stopped
     volumes:
-      - ./config/easyai.yaml:/app/config/easyai.yaml:ro
+      - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
     depends_on:
       - redis
       - postgres

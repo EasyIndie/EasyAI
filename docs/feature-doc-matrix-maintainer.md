@@ -23,7 +23,7 @@
 
 ## 2. 配置键映射（YAML-only）
 
-单一配置源：`config/easyai.yaml`（网关 + batch）。
+单一配置源：`config/easyai.development.yaml`（网关 + batch）。
 
 | 配置键 | 对应能力 | 相关文档 |
 |---|---|---|

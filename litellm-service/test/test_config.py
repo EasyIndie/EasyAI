@@ -6,7 +6,7 @@ class TestConfig(unittest.TestCase):
     def test_models_define_available_models(self):
         here = pathlib.Path(__file__).resolve()
         repo_root = here.parent.parent.parent
-        cfg_path = repo_root / "config" / "easyai.yaml"
+        cfg_path = repo_root / "config" / "easyai.development.yaml"
         self.assertTrue(cfg_path.exists())
 
         lines = cfg_path.read_text(encoding="utf-8").splitlines()

@@ -8,12 +8,12 @@
 
 ### 1.1 Docker Compose
 
-开发启动直接使用入仓的 [config/easyai.yaml](../config/easyai.yaml)，Compose project 为 `easyai-dev`，数据卷为 `easyai_dev_*`，宿主机端口为 `3004`。生产或团队部署时，先创建本地配置并生成 Compose override：
+开发启动直接使用入仓的 [config/easyai.development.yaml](../config/easyai.development.yaml)，Compose project 为 `easyai-dev`，数据卷为 `easyai_dev_*`，宿主机端口为 `3004`。生产或团队部署时，先创建本地配置并生成 Compose override：
 
 ```bash
-cp config/easyai.local.example.yaml config/easyai.local.yaml
-# 编辑 config/easyai.local.yaml，替换 REPLACE_WITH_* 后再生成 override
-python3 scripts/render-local-compose.py config/easyai.local.yaml > docker-compose.local.yml
+cp config/easyai.production.example.yaml config/easyai.production.local.yaml
+# 编辑 config/easyai.production.local.yaml，替换 REPLACE_WITH_* 后再生成 override
+python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
 ```
 
 然后运行：
@@ -67,16 +67,18 @@ curl -sS http://localhost:3004/v1/chat/completions \
 
 ### 1.2 Batch 异步任务服务
 
-- 默认在完整模式中已启用：`config/easyai.yaml` 包含 `secrets.internal_token` 且 compose 会自动启动 `batch_worker` 容器。
+- 默认在完整模式中已启用：`config/easyai.development.yaml` 包含 `secrets.internal_token` 且 compose 会自动启动 `batch_worker` 容器。
 - 若需关闭 Batch 功能：清空 YAML 配置中的 `secrets.internal_token`，并在 compose 中移除/停止 `batch_worker`。未配置 token 时访问 `/v1/batches` 会返回 503 错误。
 
 ---
 
 ## 2. 配置文件入口
 
-系统的主要行为通过一个 YAML 文件集中控制，不依赖 `.env` 或运行时环境变量注入：
+系统的主要行为通过一个 YAML 文件集中控制，不依赖 `.env` 或运行时环境变量注入。开发环境使用入仓配置，生产环境使用本地私有配置并通过 Compose override 挂载到容器内同一路径：
 
-- **统一配置**：[config/easyai.yaml](../config/easyai.yaml)
+- **开发配置**：[config/easyai.development.yaml](../config/easyai.development.yaml)
+- **生产配置示例**：[config/easyai.production.example.yaml](../config/easyai.production.example.yaml)
+- **生产本地配置**：`config/easyai.production.local.yaml`（不入仓）
 
 ### 2.1 生产安全开关
 

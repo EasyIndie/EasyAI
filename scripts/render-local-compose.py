@@ -18,7 +18,7 @@ def read_postgres_password(config_path: Path) -> str:
 
 
 def main() -> int:
-    config_path = Path(sys.argv[1] if len(sys.argv) > 1 else "config/easyai.local.yaml")
+    config_path = Path(sys.argv[1] if len(sys.argv) > 1 else "config/easyai.production.local.yaml")
     if not config_path.exists():
         print(f"config file not found: {config_path}", file=sys.stderr)
         return 1

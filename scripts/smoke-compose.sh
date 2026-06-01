@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3004}"
-CONFIG_FILE="${CONFIG_FILE:-config/easyai.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-config/easyai.development.yaml}"
 
 read_yaml_value() {
   local key="$1"

@@ -73,7 +73,7 @@ docker compose build batch_worker
 
 ### 4.1 生产配置基线
 
-- 生产环境请在 `config/easyai.yaml` 中设置 `app.env: "production"`，并确保不会使用默认示例值（例如 `admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
+- 生产环境请从 `config/easyai.production.example.yaml` 创建 `config/easyai.production.local.yaml`，并确认 `app.env: "production"` 且不会使用默认示例值（例如 `admin`、`dev-key`、`dev-internal`），否则网关会拒绝启动。
 - 如启用 Batch/内部调用鉴权（`secrets.internal_token`），默认会将 internal token 请求来源限制在私网/本机 CIDR。
 - 生产环境建议在前置反向代理或负载均衡层配置 TLS。
 

@@ -9,13 +9,13 @@
 
 ## 快速启动 (完整模式, Docker)
 
-1. 启动服务（默认加载 [config/easyai.yaml](config/easyai.yaml)，不包含生产密钥）：
+1. 启动服务（默认加载 [config/easyai.development.yaml](config/easyai.development.yaml)，不包含生产密钥）：
 
    ```bash
    docker compose up -d --build
    ```
 
-2. 调用网关（请使用 `config/easyai.yaml` 中 `secrets.api_keys` 配置的 Key）：
+2. 调用网关（请使用 `config/easyai.development.yaml` 中 `secrets.api_keys` 配置的 Key）：
 
    ```bash
    curl http://localhost:3004/v1/chat/completions \
@@ -31,9 +31,9 @@
 默认开发栈使用 Compose project `easyai-dev`、数据卷 `easyai_dev_*`、宿主机端口 `3004`。生产或团队部署时，不要把真实密钥写入入仓配置。复制一个本地 YAML，渲染 Compose override 后启动：
 
 ```bash
-cp config/easyai.local.example.yaml config/easyai.local.yaml
-# 编辑 config/easyai.local.yaml，替换 REPLACE_WITH_* 后再生成 override
-python3 scripts/render-local-compose.py config/easyai.local.yaml > docker-compose.local.yml
+cp config/easyai.production.example.yaml config/easyai.production.local.yaml
+# 编辑 config/easyai.production.local.yaml，替换 REPLACE_WITH_* 后再生成 override
+python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
 ```
 
 ```bash

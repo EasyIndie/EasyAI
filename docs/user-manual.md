@@ -59,7 +59,7 @@ curl -sS http://localhost:3004/healthz
 ### 3.2 登录管理后台
 
 - 地址：`http://localhost:3004/dashboard`
-- 认证：HTTP Basic（用户名默认 `admin`，密码来自 `config/easyai.yaml` 中的 `secrets.admin_password`）
+- 认证：HTTP Basic（用户名默认 `admin`，密码来自 `config/easyai.development.yaml` 中的 `secrets.admin_password`）
 
 ### 3.3 创建 API Key 并绑定租户
 
@@ -99,7 +99,7 @@ curl -sS http://localhost:3004/v1/chat/completions \
 - 通用对话：`chat`
 - 编程任务：`coder`
 
-这些模型名来自 `config/easyai.yaml` 的 `models` 段，业务侧可以直接把 `model` 写成 `chat` 或 `coder`。
+这些模型名来自 `config/easyai.development.yaml` 的 `models` 段，业务侧可以直接把 `model` 写成 `chat` 或 `coder`。
 
 ## 4. 核心能力说明（产品视角）
 
@@ -173,7 +173,7 @@ Guardrails 默认启用输入侧拦截；输出侧 PII 脱敏默认关闭。
 3. Worker 异步消费队列并执行子请求
 4. 客户端用 `batch_id` 查询进度并下载结果 JSONL
 
-**关键配置（在 `config/easyai.yaml` 中设置）：**
+**关键配置（在 `config/easyai.development.yaml` 中设置）：**
 - `secrets.internal_token`（启用 Batch 的必备开关）
 
 ### 4.7 内置聊天（Chat UI）
@@ -269,7 +269,7 @@ npm run doc-audit
 - OAuth/JWT：`Authorization: Bearer <jwt>`（JWKS/issuer/audience 按环境变量配置）
 
 缓存：
-- `config/easyai.yaml` 使用默认缓存策略
+- `config/easyai.development.yaml` 使用默认缓存策略
 - 典型命中条件：确定性请求（如 `temperature: 0`），请求体一致
 - `stream:true` 也可缓存，命中后支持回放节奏 `fixed|original`
 
@@ -284,7 +284,7 @@ npm run doc-audit
 - `GET /v1/batches/:batchId`
 - `GET /v1/batches/:batchId/output`
 
-Batch 需要在 `config/easyai.yaml` 中配置 `secrets.internal_token` 并运行 batch worker。
+Batch 需要在 `config/easyai.development.yaml` 中配置 `secrets.internal_token` 并运行 batch worker。
 
 ### 7.3 Admin（Dashboard API）
 
@@ -390,4 +390,4 @@ curl -N -X POST -H "Authorization: Bearer <api-key>" -H "Content-Type: applicati
 ### 8.4 多租户与鉴权
 
 - **Tenant（租户）**：配额与隔离的基本单位。一个租户可绑定多个 Key；当 Key 绑定租户时，RPM/TPM 会按租户维度统计与约束（同租户共享配额）。
-- **API Key**：调用方凭证，可由管理员在 Dashboard 创建并发放，也可通过 `config/easyai.yaml` 的 `secrets.api_keys` 配置静态 key。
+- **API Key**：调用方凭证，可由管理员在 Dashboard 创建并发放，也可通过 `config/easyai.development.yaml` 的 `secrets.api_keys` 配置静态 key。

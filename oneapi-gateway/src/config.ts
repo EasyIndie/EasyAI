@@ -104,8 +104,8 @@ function assertNoPlaceholderSecrets(opts: {
 
 function resolveConfigPath(configPath: string): string {
   if (fs.existsSync(configPath)) return configPath;
-  if (fs.existsSync("../config/easyai.yaml")) return "../config/easyai.yaml";
-  if (fs.existsSync("config/easyai.yaml")) return "config/easyai.yaml";
+  if (fs.existsSync("../config/easyai.development.yaml")) return "../config/easyai.development.yaml";
+  if (fs.existsSync("config/easyai.development.yaml")) return "config/easyai.development.yaml";
   return configPath;
 }
 

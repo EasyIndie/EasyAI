@@ -53,6 +53,7 @@ app.get("/healthz", async () => {
   return {
     ok: true,
     service: "oneapi-gateway",
+    appEnv: cfg.appEnv,
     upstreams: pool.list().map((u) => u.baseUrl),
     authModes: Array.from(cfg.authModes.values()),
     cacheEnabled: cfg.cacheEnabled,
