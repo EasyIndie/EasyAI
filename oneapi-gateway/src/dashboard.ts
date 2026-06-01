@@ -341,7 +341,7 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
         <span class="status">Gateway online</span>
         <a class="link-button" href="/chat">会话页</a>
         <a class="link-button" href="/docs">API 文档</a>
-        ${isAdmin ? `<span>已登录</span><a class="link-button" href="/dashboard">Dashboard</a><form class="logout-form" action="/admin/session/logout" method="post"><button class="link-button" type="submit">退出</button></form>` : `
+        ${isAdmin ? `<a class="link-button" href="/dashboard">Dashboard</a><form class="logout-form" action="/admin/session/logout" method="post"><button class="link-button" type="submit">退出</button></form>` : `
           <details class="login-menu"${loginOpen}>
             <summary class="link-button">管理员登录</summary>
             <div class="login-popover">

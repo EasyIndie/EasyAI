@@ -136,6 +136,7 @@ test("dashboard session: home login unlocks dashboard only in top nav and admin 
   const home = await app.inject({ method: "GET", url: "/", headers: { cookie } });
   assert.equal(home.statusCode, 200);
   assert.ok(home.body.includes('href="/dashboard"'));
+  assert.equal(home.body.includes("已登录"), false);
   const main = home.body.match(/<main class="wrap">([\s\S]*?)<\/main>/)?.[1] ?? "";
   assert.equal(main.includes('href="/dashboard"'), false);
   assert.equal(main.includes("<h2>管理后台</h2>"), false);
