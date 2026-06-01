@@ -99,7 +99,14 @@ function buildGlobalNav(active: "chat" | "docs" | "dashboard"): string {
     background: #eef6ff;
   }
   .easyai-nav-spacer {
-    height: 57px;
+    height: var(--easyai-nav-height, 57px);
+  }
+  body.easyai-page-chat {
+    overflow: hidden;
+  }
+  body.easyai-page-chat #root {
+    height: calc(100dvh - var(--easyai-nav-height, 57px));
+    min-height: calc(100dvh - var(--easyai-nav-height, 57px));
   }
 </style>
 <nav class="easyai-nav" data-easyai-global-nav="1">
@@ -115,12 +122,30 @@ function buildGlobalNav(active: "chat" | "docs" | "dashboard"): string {
     ${item("dashboard", "/dashboard", "Dashboard")}
   </div>
 </nav>
-<div class="easyai-nav-spacer" aria-hidden="true"></div>`;
+<div class="easyai-nav-spacer" aria-hidden="true"></div>
+<script>
+(() => {
+  const nav = document.querySelector(".easyai-nav[data-easyai-global-nav='1']");
+  if (!nav) return;
+  const apply = () => {
+    const h = nav.getBoundingClientRect().height;
+    if (h > 0) document.documentElement.style.setProperty("--easyai-nav-height", h + "px");
+  };
+  apply();
+  window.addEventListener("resize", apply, { passive: true });
+})();
+</script>`;
 }
 
 function injectGlobalNav(html: string, active: "chat" | "docs" | "dashboard"): string {
   if (html.includes("data-easyai-global-nav")) return html;
-  return html.replace(/<body([^>]*)>/i, `<body$1>${buildGlobalNav(active)}`);
+  return html.replace(/<body([^>]*)>/i, (_m, attrs) => {
+    const bodyAttrs = String(attrs ?? "");
+    if (/\bclass\s*=\s*["'][^"']*["']/i.test(bodyAttrs)) {
+      return `<body${bodyAttrs.replace(/\bclass\s*=\s*(["'])([^"']*)\1/i, (_cm, q, cls) => ` class=${q}${cls} easyai-page-${active}${q}`)}>${buildGlobalNav(active)}`;
+    }
+    return `<body${bodyAttrs} class="easyai-page-${active}">${buildGlobalNav(active)}`;
+  });
 }
 
 function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): string {

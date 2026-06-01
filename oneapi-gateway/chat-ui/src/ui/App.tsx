@@ -818,7 +818,8 @@ export function App() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        minHeight: "100vh",
+        minHeight: "100%",
+        height: "100%",
         background: "#f5f5f5",
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}>
@@ -884,7 +885,10 @@ export function App() {
   return (
     <div style={{
       display: "flex",
-      minHeight: "100vh",
+      minHeight: "100%",
+      height: "100%",
+      overflow: "hidden",
+      minWidth: 0,
       fontFamily: "system-ui, -apple-system, sans-serif",
       color: "#1a1a1a",
     }}>
@@ -892,6 +896,7 @@ export function App() {
       <div style={{
         width: sidebarWidth,
         minWidth: sidebarWidth,
+        minHeight: 0,
         background: "#f8f9fa",
         borderRight: "1px solid #e8e8e8",
         display: "flex",
@@ -920,7 +925,7 @@ export function App() {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: 8 }}>
           {convLoading && conversations.length === 0 ? (
             <div style={{ padding: 16, color: "#999", fontSize: 13, textAlign: "center" }}>加载中...</div>
           ) : conversations.length === 0 ? (
@@ -1027,7 +1032,7 @@ export function App() {
         </div>
 
         <div style={{
-          padding: "12px 16px",
+          padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
           borderTop: "1px solid #e8e8e8",
           fontSize: 12,
           color: "#999",
@@ -1057,6 +1062,7 @@ export function App() {
         flex: 1,
         display: "flex",
         flexDirection: "column",
+        minHeight: 0,
         minWidth: 0,
         background: "#fff",
       }}>
@@ -1246,6 +1252,9 @@ export function App() {
             <div style={{
               flex: 1,
               overflow: "auto",
+              minHeight: 0,
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
               padding: 24,
             }} ref={messagesScrollRef}>
               {!currentConv && (
@@ -1324,7 +1333,7 @@ export function App() {
 
             {/* Input area */}
             <div style={{
-              padding: "16px 24px",
+              padding: "16px 24px calc(16px + env(safe-area-inset-bottom, 0px))",
               borderTop: "1px solid #e8e8e8",
               background: "#fafafa",
             }}>
