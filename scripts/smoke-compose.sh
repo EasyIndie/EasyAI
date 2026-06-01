@@ -18,6 +18,47 @@ retry_curl_json() {
   return 1
 }
 
+retry_cmd() {
+  local attempts="${1:-30}"
+  local sleep_sec="${2:-1}"
+  shift 2
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if "$@"; then
+      return 0
+    fi
+    sleep "$sleep_sec"
+  done
+  return 1
+}
+
+check_models() {
+  curl -fsS "$BASE_URL/v1/models" -H "Authorization: Bearer $API_KEY" | jq -e . >/dev/null
+}
+
+check_chat() {
+  curl -fsS "$BASE_URL/v1/chat/completions" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"chat","messages":[{"role":"user","content":"smoke"}],"temperature":0}' | jq -e . >/dev/null
+}
+
+check_dashboard() {
+  curl -fsS -u "$ADMIN_USER:$ADMIN_PASS" "$BASE_URL/admin/api/usage?sinceMinutes=60" | jq -e . >/dev/null
+}
+
+create_batch() {
+  curl -fsS -X POST "$BASE_URL/v1/batches" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"requests":[{"endpoint":"/v1/chat/completions","body":{"model":"chat","messages":[{"role":"user","content":"batch-smoke"}],"temperature":0}}]}' \
+    | jq -r '.batch_id // .id'
+}
+
+check_batch_output() {
+  curl -fsS "$BASE_URL/v1/batches/$BATCH_ID/output" -H "Authorization: Bearer $API_KEY" >/dev/null
+}
+
 read_yaml_value() {
   local key="$1"
   awk -v key="$key" '
@@ -57,25 +98,19 @@ echo "[1/6] healthz"
 retry_curl_json "$BASE_URL/healthz" 45 1
 
 echo "[2/6] docs"
-curl -fsS "$BASE_URL/openapi.json" | json
+retry_curl_json "$BASE_URL/openapi.json" 30 1
 
 echo "[3/6] authenticated models"
-curl -fsS "$BASE_URL/v1/models" -H "Authorization: Bearer $API_KEY" | json
+retry_cmd 30 1 check_models
 
 echo "[4/6] authenticated chat"
-curl -fsS "$BASE_URL/v1/chat/completions" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"chat","messages":[{"role":"user","content":"smoke"}],"temperature":0}' | json
+retry_cmd 40 1 check_chat
 
 echo "[5/6] dashboard auth"
-curl -fsS -u "$ADMIN_USER:$ADMIN_PASS" "$BASE_URL/admin/api/usage?sinceMinutes=60" | json
+retry_cmd 30 1 check_dashboard
 
 echo "[6/6] batch queue and status"
-BATCH_ID="$(curl -fsS -X POST "$BASE_URL/v1/batches" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"requests":[{"endpoint":"/v1/chat/completions","body":{"model":"chat","messages":[{"role":"user","content":"batch-smoke"}],"temperature":0}}]}' | jq -r '.batch_id // .id')"
+BATCH_ID="$(retry_cmd 30 1 create_batch)"
 
 if [[ -z "$BATCH_ID" || "$BATCH_ID" == "null" ]]; then
   echo "batch id missing"
@@ -90,5 +125,5 @@ for _ in {1..15}; do
   sleep 1
 done
 
-curl -fsS "$BASE_URL/v1/batches/$BATCH_ID/output" -H "Authorization: Bearer $API_KEY" >/dev/null
+retry_cmd 30 1 check_batch_output
 echo "OK"

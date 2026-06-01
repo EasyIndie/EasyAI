@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+# Validate changes that are about to be pushed.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ -z "${local_sha:-}" ]]; then
+    continue
+  fi
+  if [[ "${remote_sha:-}" == "0000000000000000000000000000000000000000" ]]; then
+    "$repo_root/scripts/check-secrets.sh" range "$local_sha^..$local_sha"
+  else
+    "$repo_root/scripts/check-secrets.sh" range "$remote_sha..$local_sha"
+  fi
+done

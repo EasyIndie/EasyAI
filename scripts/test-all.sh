@@ -39,6 +39,8 @@ cleanup() {
 trap cleanup EXIT
 
 docker compose -f "$root/docker-compose.yml" up -d --build redis postgres ollama litellm oneapi batch_worker
+# Ensure local Ollama model exists before smoke checks the chat endpoint.
+docker compose -f "$root/docker-compose.yml" exec -T ollama ollama pull qwen2.5:0.5b
 "$root/scripts/smoke-compose.sh"
 
 echo "OK"

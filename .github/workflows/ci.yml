@@ -24,5 +24,7 @@ jobs:
       - uses: azure/setup-kubectl@v4
         with:
           version: "v1.30.0"
+      - name: Secret check
+        run: bash scripts/check-secrets.sh all
       - name: Run full gate
         run: bash scripts/test-all.sh

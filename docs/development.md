@@ -61,3 +61,19 @@ bash scripts/test-all.sh
 - 生产配置从 `config/easyai.production.example.yaml` 复制到本地私有文件
 - 必须替换 `REPLACE_WITH_*`、`dev-key`、`dev-internal` 等默认值
 - 不要提交 `*.local.yaml`、`.env`、密钥文件
+
+## 6. 提交前密钥检查（必做）
+
+首次在本仓库启用 hooks：
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit .githooks/pre-push
+```
+
+手动检查：
+
+```bash
+bash scripts/check-secrets.sh staged
+bash scripts/check-secrets.sh all
+```
