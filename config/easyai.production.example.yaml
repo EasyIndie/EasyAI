@@ -21,11 +21,14 @@ providers:
 
 models:
   chat:
+    provider: ollama
+    model: qwen2.5:0.5b
+  dsv4flash:
     provider: deepseek
     model: deepseek-v4-flash
-  coder:
+  dsv4pro:
     provider: deepseek
     model: deepseek-v4-pro
-  reasoner:
+  gpt:
     provider: openai
     model: gpt-5.5
