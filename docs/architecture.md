@@ -25,6 +25,7 @@
 2. 网关写入 Postgres 并把 `batch_id` 推入 Redis 队列
 3. Worker 从队列消费并逐项调用网关
 4. Worker 回写 `batch_items` 与 `batches` 状态
+5. 客户端通过 `GET /v1/batches/:batchId/output` 获取 `JSONL` 输出
 
 ## 3. 路由入口
 

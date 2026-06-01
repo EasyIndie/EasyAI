@@ -835,7 +835,9 @@ export function App() {
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>EasyAI Chat</h1>
             <DeploymentBadge appEnv={health?.appEnv} />
           </div>
-          <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>请输入你的 API 密钥开始使用</p>
+          <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>
+            请输入 API Key 开始使用。若聊天返回 model not found，请先在服务端拉取配置中的 Ollama 模型。
+          </p>
           <input
             type="password"
             value={keyInput}
@@ -1449,6 +1451,7 @@ export function App() {
               </label>
               <span>模型数量：{modelList.length}</span>
               <span>调用模型：{selectedModel || "未选择"}</span>
+              {modelList.length === 0 ? <span style={{ color: "#b45309" }}>提示：当前没有可调用模型</span> : null}
               <span>温度：{temperature}</span>
               <span>最大 Tokens：{maxTokens}</span>
               {testLatencyMs !== null ? <span>耗时：{testLatencyMs} ms</span> : null}

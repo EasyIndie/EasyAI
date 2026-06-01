@@ -155,7 +155,7 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
     "内置聊天界面，支持会话历史、流式输出和模型测试",
     "提供 Batch API，用于离线批量请求和异步处理",
     "提供缓存、回放、指标和用量统计，便于控制成本和排障",
-    "提供注入拦截、内网 IP 拦截和 PII 脱敏等安全能力",
+    "提供注入拦截、内网 IP 拦截和可选 PII 脱敏能力",
   ];
   const usageSteps = [
     {

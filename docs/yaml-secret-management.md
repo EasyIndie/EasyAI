@@ -23,6 +23,7 @@ python3 scripts/render-local-compose.py config/easyai.production.local.yaml > do
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama ollama pull qwen2.5:0.5b
 ```
 
 ## 3. 必换敏感项

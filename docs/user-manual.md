@@ -14,6 +14,7 @@
 ```bash
 docker compose up -d --build
 curl -sS http://localhost:3004/healthz
+docker compose exec -T ollama ollama pull qwen2.5:0.5b
 ```
 
 ### 2.2 打开入口
@@ -38,6 +39,7 @@ curl -sS http://localhost:3004/v1/chat/completions \
 
 - 默认使用 API Key：`Authorization: Bearer <key>` 或 `x-api-key: <key>`
 - 开发环境初始 key 来自 `config/easyai.development.yaml` 的 `secrets.api_keys`
+- 所有 `/v1/*` 和 `/chat-api/*` 请求都要求鉴权
 
 ### 3.2 Dashboard 鉴权
 
@@ -60,6 +62,7 @@ curl -sS http://localhost:3004/v1/chat/completions \
 - `GET /v1/batches/:batchId/output`
 
 Batch 可用前提：`secrets.internal_token` 已配置且 `batch_worker` 正常运行。
+`/v1/batches/:batchId/output` 返回 `application/jsonl`（每行一条结果）。
 
 ### 4.3 Chat API（供 Chat UI 使用）
 
@@ -73,6 +76,7 @@ Batch 可用前提：`secrets.internal_token` 已配置且 `batch_worker` 正常
 - 统一配置文件：`config/easyai.development.yaml`
 - `models` 是对外可见模型名（客户端请求时填这里的 key）
 - 生产部署请使用 `config/easyai.production.local.yaml`（不入仓）
+- 如果 `models.chat` 映射到 Ollama，本地需先 `ollama pull` 对应模型，否则聊天会返回 `404 model not found`
 
 ## 6. 常见问题
 
@@ -80,6 +84,7 @@ Batch 可用前提：`secrets.internal_token` 已配置且 `batch_worker` 正常
 - `429 rate limited`：触发 RPM/TPM 限流，需调整租户/Key 配额
 - `503 batch worker not configured`：未配置 `secrets.internal_token` 或 worker 未运行
 - `400 model not allowed`：模型名不在 `models` 配置中
+- `404 model not found`：上游模型未就绪（常见于 Ollama 未拉取模型）
 
 ## 7. 相关文档
 

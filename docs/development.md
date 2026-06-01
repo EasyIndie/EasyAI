@@ -12,6 +12,7 @@
 
 ```bash
 docker compose up -d --build
+docker compose exec -T ollama ollama pull qwen2.5:0.5b
 ```
 
 网关测试：
@@ -47,6 +48,12 @@ npm run doc-audit
 
 ```bash
 bash scripts/test-all.sh
+```
+
+仅执行对外服务验收（smoke）：
+
+```bash
+./scripts/smoke-compose.sh
 ```
 
 ## 5. 安全基线（生产）

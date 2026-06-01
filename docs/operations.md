@@ -10,16 +10,22 @@ curl -sS http://localhost:3004/healthz
 curl -sS http://localhost:3004/openapi.json | head
 ```
 
-### 1.2 快速 smoke
+### 1.2 对外服务验收（smoke）
 
 ```bash
 ./scripts/smoke-compose.sh
 ```
 
-可指定地址：
+开发环境：
 
 ```bash
 BASE_URL=http://localhost:3004 ./scripts/smoke-compose.sh
+```
+
+生产环境：
+
+```bash
+BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml ./scripts/smoke-compose.sh
 ```
 
 ### 1.3 生产前最小安全检查
@@ -43,8 +49,17 @@ docker compose logs --tail=200 oneapi litellm batch_worker
 - `401 unauthorized`：凭据错误或缺失
 - `429 rate limited`：触发限流
 - `400 model not allowed`：请求模型不在 `models` 配置中
+- `404 model not found`：上游声明了模型别名，但实际模型未就绪（例如 Ollama 未拉取）
 - `503`（Batch）：`internal_token` 未配置或 worker 不可用
 - `502/504`：上游模型服务不可达或超时
+
+若 `chat` 映射到 Ollama，可先执行：
+
+```bash
+docker compose exec -T ollama ollama pull qwen2.5:0.5b
+# 生产 override：
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama ollama pull qwen2.5:0.5b
+```
 
 ### 2.3 Redis 快速检查（可选）
 
@@ -67,7 +82,7 @@ docker compose exec -T redis redis-cli --raw KEYS 'cache:v1:*' | head
 ./scripts/restore-postgres.sh backups/postgres/oneapi_YYYYmmdd_HHMMSS.dump --yes
 ```
 
-线上 override 需要显式传 Compose 文件：
+生产 override 需要显式传 Compose 文件：
 
 ```bash
 COMPOSE_FILE="docker-compose.yml:docker-compose.local.yml" ./scripts/backup-postgres.sh

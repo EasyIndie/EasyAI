@@ -11,6 +11,7 @@ EasyAI 是一个可本地运行的统一 LLM 网关平台，包含：
 ```bash
 docker compose up -d --build
 curl -sS http://localhost:3004/healthz
+docker compose exec -T ollama ollama pull qwen2.5:0.5b
 ```
 
 发起一次请求（默认开发 key: `dev-key`）：
@@ -22,19 +23,26 @@ curl -sS http://localhost:3004/v1/chat/completions \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
-## 线上部署（本地私有配置）
+## 生产环境部署（本地私有配置）
 
 ```bash
 cp config/easyai.production.example.yaml config/easyai.production.local.yaml
 # 编辑并替换所有 REPLACE_WITH_*
 python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama ollama pull qwen2.5:0.5b
+```
+
+生产环境对外服务验收（smoke）：
+
+```bash
+BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml ./scripts/smoke-compose.sh
 ```
 
 ## 主要入口
 
 - 开发网关：`http://localhost:3004`
-- 线上网关（override）：`http://localhost:3003`
+- 生产网关（override）：`http://localhost:3003`
 - 首页：`/`
 - API 文档：`/docs`
 - OpenAPI JSON：`/openapi.json`

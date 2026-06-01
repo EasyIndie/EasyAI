@@ -23,6 +23,12 @@ curl -sS http://localhost:3004/healthz
 docker compose exec -T litellm python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
 ```
 
+步骤 2.5：准备本地 Ollama 模型（仅当 `models.chat` 指向 Ollama）
+
+```bash
+docker compose exec -T ollama ollama pull qwen2.5:0.5b
+```
+
 步骤 3：接口验证（网关转发）
 
 ```bash
@@ -43,9 +49,9 @@ docker compose ps
 docker compose logs --tail=200 oneapi litellm batch_worker
 ```
 
-### 1.2 线上环境部署步骤（Docker Compose + 本地私有配置）
+### 1.2 生产环境部署步骤（Docker Compose + 本地私有配置）
 
-步骤 1：准备线上私有配置并渲染 override（不要把真实密钥写入入仓文件）
+步骤 1：准备生产私有配置并渲染 override（不要把真实密钥写入入仓文件）
 
 ```bash
 cp config/easyai.production.example.yaml config/easyai.production.local.yaml
@@ -53,7 +59,7 @@ cp config/easyai.production.example.yaml config/easyai.production.local.yaml
 python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
 ```
 
-步骤 2：启动线上栈（使用 override）
+步骤 2：启动生产栈（使用 override）
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
@@ -65,6 +71,13 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 curl -sS http://localhost:3003/healthz
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T litellm \
   python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
+```
+
+步骤 3.5：准备生产 Ollama 模型（仅当 `models.chat` 指向 Ollama）
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama \
+  ollama pull qwen2.5:0.5b
 ```
 
 步骤 4：接口验证（网关转发）
@@ -87,7 +100,13 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml ps
 docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail=200 oneapi litellm batch_worker
 ```
 
-生产 override 使用 Compose project `easyai-prod`，数据卷为 `easyai_prod_*`，宿主机端口为 `3003`。开发与线上可在同机共存，不共享容器、网络和数据卷。
+步骤 6：对外服务验收（建议）
+
+```bash
+BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml ./scripts/smoke-compose.sh
+```
+
+生产 override 使用 Compose project `easyai-prod`，数据卷为 `easyai_prod_*`，宿主机端口为 `3003`。开发与生产可在同机共存，不共享容器、网络和数据卷。
 
 ### 1.3 端口暴露与访问入口
 
@@ -112,7 +131,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail=200
 docker compose down
 ```
 
-线上环境停止（保留数据卷）：
+生产环境停止（保留数据卷）：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml down
