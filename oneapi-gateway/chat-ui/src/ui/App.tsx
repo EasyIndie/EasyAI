@@ -231,6 +231,7 @@ export function App() {
 
   const abortRef = useRef<AbortController | null>(null);
   const testAbortRef = useRef<AbortController | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentIdRef = useRef<string | null>(null);
@@ -243,7 +244,9 @@ export function App() {
   );
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const panel = messagesScrollRef.current;
+    if (!panel) return;
+    panel.scrollTo({ top: panel.scrollHeight, behavior: "auto" });
   }, []);
 
   useEffect(() => {
@@ -1244,7 +1247,7 @@ export function App() {
               flex: 1,
               overflow: "auto",
               padding: 24,
-            }}>
+            }} ref={messagesScrollRef}>
               {!currentConv && (
                 <div style={{
                   display: "flex",

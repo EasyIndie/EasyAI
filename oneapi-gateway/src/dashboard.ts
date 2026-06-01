@@ -30,6 +30,99 @@ function buildPlaygroundAuthHeaders(cfg: Config): Record<string, string> | undef
   return;
 }
 
+function buildGlobalNav(active: "chat" | "docs" | "dashboard"): string {
+  const item = (key: "chat" | "docs" | "dashboard", href: string, label: string) => {
+    const isActive = key === active;
+    return `<a class="easyai-nav-link${isActive ? " is-active" : ""}" href="${href}">${label}</a>`;
+  };
+  return `
+<style>
+  .easyai-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 1000;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .easyai-nav-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .easyai-nav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #172033;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .easyai-nav-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: #1769aa;
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .easyai-nav-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .easyai-nav-link {
+    color: #4b5563;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: #fff;
+  }
+  .easyai-nav-link.is-active {
+    color: #0f4f87;
+    border-color: #c7def4;
+    background: #eef6ff;
+  }
+  .easyai-nav-spacer {
+    height: 57px;
+  }
+</style>
+<nav class="easyai-nav" data-easyai-global-nav="1">
+  <div class="easyai-nav-left">
+    <a class="easyai-nav-brand" href="/" aria-label="返回首页" title="返回首页">
+      <span class="easyai-nav-logo">AI</span>
+      <span>EasyAI Console</span>
+    </a>
+  </div>
+  <div class="easyai-nav-tabs">
+    ${item("chat", "/chat", "会话")}
+    ${item("docs", "/docs", "API 文档")}
+    ${item("dashboard", "/dashboard", "Dashboard")}
+  </div>
+</nav>
+<div class="easyai-nav-spacer" aria-hidden="true"></div>`;
+}
+
+function injectGlobalNav(html: string, active: "chat" | "docs" | "dashboard"): string {
+  if (html.includes("data-easyai-global-nav")) return html;
+  return html.replace(/<body([^>]*)>/i, `<body$1>${buildGlobalNav(active)}`);
+}
+
 function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): string {
   const capabilityItems = [
     "统一 OpenAI-compatible 入口，屏蔽上游模型服务差异",
@@ -479,13 +572,13 @@ if (form) {
     app.get("/dashboard", async (_req, reply) => {
       const html = fs.readFileSync(path.join(dashboardRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(html);
+      return reply.send(injectGlobalNav(html, "dashboard"));
     });
 
     app.get("/dashboard/*", async (_req, reply) => {
       const html = fs.readFileSync(path.join(dashboardRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(html);
+      return reply.send(injectGlobalNav(html, "dashboard"));
     });
   } else {
     app.get("/dashboard", async (_req, reply) => {
@@ -503,13 +596,13 @@ if (form) {
     app.get("/chat", async (_req, reply) => {
       const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(html);
+      return reply.send(injectGlobalNav(html, "chat"));
     });
 
     app.get("/chat/*", async (_req, reply) => {
       const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(html);
+      return reply.send(injectGlobalNav(html, "chat"));
     });
   } else {
     app.get("/chat", async (_req, reply) => {

@@ -239,8 +239,88 @@ window.ui = SwaggerUIBundle({
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OneAPI Gateway API Docs</title>
     <link rel="stylesheet" href="/docs/assets/swagger-ui.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      .easyai-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fff;
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        z-index: 1000;
+      }
+      .easyai-nav-spacer {
+        height: 57px;
+      }
+      .easyai-nav-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .easyai-nav-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: #172033;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .easyai-nav-logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        background: #1769aa;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .easyai-nav-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .easyai-nav-link {
+        color: #4b5563;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 6px 10px;
+        background: #fff;
+      }
+      .easyai-nav-link.is-active {
+        color: #0f4f87;
+        border-color: #c7def4;
+        background: #eef6ff;
+      }
+    </style>
   </head>
   <body>
+    <nav class="easyai-nav" data-easyai-global-nav="1">
+      <div class="easyai-nav-left">
+        <a class="easyai-nav-brand" href="/" aria-label="返回首页" title="返回首页">
+          <span class="easyai-nav-logo">AI</span>
+          <span>EasyAI Console</span>
+        </a>
+      </div>
+      <div class="easyai-nav-tabs">
+        <a class="easyai-nav-link" href="/chat">会话</a>
+        <a class="easyai-nav-link is-active" href="/docs">API 文档</a>
+        <a class="easyai-nav-link" href="/dashboard">Dashboard</a>
+      </div>
+    </nav>
+    <div class="easyai-nav-spacer" aria-hidden="true"></div>
     <div id="swagger-ui"></div>
     <script src="/docs/assets/swagger-ui-bundle.js"></script>
     <script src="/docs/init.js"></script>
