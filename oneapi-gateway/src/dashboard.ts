@@ -9,6 +9,7 @@ import type { Db } from "./db.js";
 import { getUsageSummary } from "./db.js";
 import { ipAllowed } from "./net.js";
 import { clearAdminSessionCookie, createAdminSessionCookie, isAdminRequest } from "./admin-auth.js";
+import { buildGlobalNav, buildThemeInitScript, injectGlobalNav } from "./ui-shell.js";
 
 function requireAdminAction(req: any): boolean {
   const h = req.headers["x-oneapi-admin-action"];
@@ -28,124 +29,6 @@ function buildPlaygroundAuthHeaders(cfg: Config): Record<string, string> | undef
     return { authorization: `Bearer ${firstApiKey}` };
   }
   return;
-}
-
-function buildGlobalNav(active: "chat" | "docs" | "dashboard"): string {
-  const item = (key: "chat" | "docs" | "dashboard", href: string, label: string) => {
-    const isActive = key === active;
-    return `<a class="easyai-nav-link${isActive ? " is-active" : ""}" href="${href}">${label}</a>`;
-  };
-  return `
-<style>
-  .easyai-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 10px 16px;
-    border-bottom: 1px solid #e5e7eb;
-    background: #ffffff;
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: 0;
-    z-index: 1000;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  }
-  .easyai-nav-left {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .easyai-nav-brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
-    color: #172033;
-    font-size: 18px;
-    font-weight: 700;
-  }
-  .easyai-nav-logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    background: #1769aa;
-    color: #fff;
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 800;
-    line-height: 1;
-  }
-  .easyai-nav-tabs {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .easyai-nav-link {
-    color: #4b5563;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 6px 10px;
-    background: #fff;
-  }
-  .easyai-nav-link.is-active {
-    color: #0f4f87;
-    border-color: #c7def4;
-    background: #eef6ff;
-  }
-  .easyai-nav-spacer {
-    height: var(--easyai-nav-height, 57px);
-  }
-  body.easyai-page-chat {
-    overflow: hidden;
-  }
-  body.easyai-page-chat #root {
-    height: calc(100dvh - var(--easyai-nav-height, 57px));
-    min-height: calc(100dvh - var(--easyai-nav-height, 57px));
-  }
-</style>
-<nav class="easyai-nav" data-easyai-global-nav="1">
-  <div class="easyai-nav-left">
-    <a class="easyai-nav-brand" href="/" aria-label="返回首页" title="返回首页">
-      <span class="easyai-nav-logo">AI</span>
-      <span>EasyAI Console</span>
-    </a>
-  </div>
-  <div class="easyai-nav-tabs">
-    ${item("chat", "/chat", "会话")}
-    ${item("docs", "/docs", "API 文档")}
-    ${item("dashboard", "/dashboard", "Dashboard")}
-  </div>
-</nav>
-<div class="easyai-nav-spacer" aria-hidden="true"></div>
-<script>
-(() => {
-  const nav = document.querySelector(".easyai-nav[data-easyai-global-nav='1']");
-  if (!nav) return;
-  const apply = () => {
-    const h = nav.getBoundingClientRect().height;
-    if (h > 0) document.documentElement.style.setProperty("--easyai-nav-height", h + "px");
-  };
-  apply();
-  window.addEventListener("resize", apply, { passive: true });
-})();
-</script>`;
-}
-
-function injectGlobalNav(html: string, active: "chat" | "docs" | "dashboard"): string {
-  if (html.includes("data-easyai-global-nav")) return html;
-  return html.replace(/<body([^>]*)>/i, (_m, attrs) => {
-    const bodyAttrs = String(attrs ?? "");
-    if (/\bclass\s*=\s*["'][^"']*["']/i.test(bodyAttrs)) {
-      return `<body${bodyAttrs.replace(/\bclass\s*=\s*(["'])([^"']*)\1/i, (_cm, q, cls) => ` class=${q}${cls} easyai-page-${active}${q}`)}>${buildGlobalNav(active)}`;
-    }
-    return `<body${bodyAttrs} class="easyai-page-${active}">${buildGlobalNav(active)}`;
-  });
 }
 
 function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): string {
@@ -174,129 +57,24 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
       hint: "API Key / Tenant / Usage",
     },
   ];
-  const loginMessage = loginState === "failed"
-    ? `<div class="notice error">账号或密码错误。</div>`
-    : loginState === "required"
-      ? `<div class="notice">请先登录。</div>`
-      : "";
-  const loginOpen = loginState === "failed" || loginState === "required" ? " open" : "";
-
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
+  ${buildThemeInitScript()}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>EasyAI Console</title>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #f7f8fb;
-      --panel: #ffffff;
-      --text: #172033;
-      --muted: #5c667a;
-      --line: #d9dee8;
-      --accent: #1769aa;
-      --accent-strong: #0f4f87;
-      --ok: #167a4a;
-      --danger: #b42318;
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--text);
-      background: var(--bg);
-    }
-    header {
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      font-family: var(--ui-font-sans);
+      color: var(--ui-text);
     }
     .wrap {
       width: min(1120px, calc(100% - 32px));
       margin: 0 auto;
-    }
-    .top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      min-height: 72px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 700;
-      font-size: 18px;
-    }
-    .mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      color: #ffffff;
-      background: var(--accent);
-      font-weight: 800;
-    }
-    .status {
-      color: var(--ok);
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .top-actions {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 14px;
-      margin-left: auto;
-    }
-    .logout-form { margin: 0; }
-    .link-button {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--accent-strong);
-      cursor: pointer;
-      font: inherit;
-      font-weight: 700;
-      padding: 8px 11px;
-      text-decoration: none;
-    }
-    .login-menu {
-      position: relative;
-    }
-    .login-menu summary {
-      list-style: none;
-    }
-    .login-menu summary::-webkit-details-marker {
-      display: none;
-    }
-    .login-popover {
-      position: absolute;
-      top: calc(100% + 10px);
-      right: 0;
-      z-index: 20;
-      width: min(320px, calc(100vw - 32px));
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: 0 16px 40px rgba(23, 32, 51, .12);
-      padding: 16px;
-    }
-    .login-popover h2 {
-      margin: 0 0 6px;
-      font-size: 18px;
-      line-height: 1.3;
-    }
-    .login-popover p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
     }
     main {
       padding: 44px 0 56px;
@@ -305,10 +83,12 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
       margin-bottom: 20px;
     }
     .intro {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--ui-radius-lg);
+      background: var(--ui-bg-elevated);
+      box-shadow: var(--ui-shadow-soft);
       padding: 22px;
+      backdrop-filter: blur(14px);
     }
     h1 {
       margin: 0 0 12px;
@@ -318,68 +98,26 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
     }
     .lead {
       margin: 0;
-      color: var(--muted);
+      color: var(--ui-text-muted);
       font-size: 16px;
       line-height: 1.65;
     }
     .subtle {
       margin: 0 0 14px;
-      color: var(--accent-strong);
+      color: var(--ui-primary);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: .04em;
-    }
-    .admin-form {
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .admin-form label {
-      display: grid;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .admin-form input {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 11px 12px;
-      color: var(--text);
-      font: inherit;
-    }
-    .primary-button {
-      border: 0;
-      border-radius: 8px;
-      background: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      font: inherit;
-      font-weight: 700;
-      padding: 12px 14px;
-    }
-    .notice {
-      margin: 10px 0 0;
-      border: 1px solid #b8c7dc;
-      border-radius: 8px;
-      background: #f4f8ff;
-      color: var(--accent-strong);
-      padding: 10px 12px;
-      font-size: 13px;
-    }
-    .notice.error {
-      border-color: #f2b8b5;
-      background: #fff5f5;
-      color: var(--danger);
+      letter-spacing: 0;
     }
     .section {
       margin-top: 24px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--panel);
+      border: 1px solid var(--ui-border);
+      border-radius: var(--ui-radius-lg);
+      background: var(--ui-bg-elevated);
+      box-shadow: var(--ui-shadow-soft);
       padding: 20px;
+      backdrop-filter: blur(14px);
     }
     .section h2 {
       margin: 0 0 12px;
@@ -388,7 +126,7 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
     }
     .section p {
       margin: 0;
-      color: var(--muted);
+      color: var(--ui-text-muted);
       line-height: 1.65;
     }
     .feature-list {
@@ -400,11 +138,11 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
       gap: 10px;
     }
     .feature-list li {
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--ui-radius-md);
       padding: 12px 14px;
-      background: #fbfcfe;
-      color: var(--text);
+      background: var(--ui-bg-strong);
+      color: var(--ui-text);
       line-height: 1.5;
     }
     .steps {
@@ -414,10 +152,10 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
       margin-top: 14px;
     }
     .step {
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--ui-radius-md);
       padding: 14px;
-      background: #fbfcfe;
+      background: var(--ui-bg-strong);
     }
     .step strong {
       display: block;
@@ -431,8 +169,8 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
     .step code,
     .hint {
       display: block;
-      color: var(--accent-strong);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--ui-primary);
+      font-family: var(--ui-font-mono);
       font-size: 12px;
       word-break: break-word;
     }
@@ -442,41 +180,14 @@ function buildHomeHtml(cfg: Config, isAdmin: boolean, loginState?: string): stri
     }
     @media (max-width: 560px) {
       .wrap { width: min(100% - 24px, 1120px); }
-      .top { align-items: flex-start; flex-direction: column; padding: 16px 0; }
-      .top-actions { width: 100%; align-items: center; justify-content: space-between; }
-      .login-popover { left: 0; right: auto; }
       main { padding: 28px 0 40px; }
       h1 { font-size: 28px; }
       .section { padding: 16px; }
     }
   </style>
 </head>
-<body>
-  <header>
-    <div class="wrap top">
-      <div class="brand"><span class="mark">AI</span><span>EasyAI Console</span></div>
-      <div class="top-actions">
-        <span class="status">Gateway online</span>
-        <a class="link-button" href="/chat">会话页</a>
-        <a class="link-button" href="/docs">API 文档</a>
-        ${isAdmin ? `<a class="link-button" href="/dashboard">Dashboard</a><form class="logout-form" action="/admin/session/logout" method="post"><button class="link-button" type="submit">退出</button></form>` : `
-          <details class="login-menu"${loginOpen}>
-            <summary class="link-button">管理员登录</summary>
-            <div class="login-popover">
-              <h2>管理员登录</h2>
-              <p>登录后进入 Dashboard 管理 API Key、租户和用量。</p>
-              ${loginMessage}
-              <form class="admin-form" id="admin-login-form">
-                <label>账号<input name="username" autocomplete="username" required /></label>
-                <label>密码<input name="password" type="password" autocomplete="current-password" required /></label>
-                <button class="primary-button" type="submit">登录</button>
-              </form>
-            </div>
-          </details>
-        `}
-      </div>
-    </div>
-  </header>
+<body class="easyai-page-home">
+  ${buildGlobalNav({ active: "home", isAdmin, loginState })}
   <main class="wrap">
     <section class="hero">
       <div class="intro">
@@ -525,6 +236,7 @@ export async function registerDashboard(app: FastifyInstance, cfg: Config, db: D
 
   app.addHook("onRequest", async (req, reply) => {
     const p = (req.url.split("?")[0] ?? req.url) as string;
+    if (p.startsWith("/dashboard/assets/")) return;
     const needsAuth = p === "/dashboard" || p.startsWith("/dashboard/") || p.startsWith("/admin/api/");
     if (!needsAuth) return;
     if (!ipAllowed((req as any).ip, cfg.adminAllowedCidrs)) {
@@ -597,13 +309,13 @@ if (form) {
     app.get("/dashboard", async (_req, reply) => {
       const html = fs.readFileSync(path.join(dashboardRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(injectGlobalNav(html, "dashboard"));
+      return reply.send(injectGlobalNav(html, { active: "dashboard" }));
     });
 
     app.get("/dashboard/*", async (_req, reply) => {
       const html = fs.readFileSync(path.join(dashboardRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(injectGlobalNav(html, "dashboard"));
+      return reply.send(injectGlobalNav(html, { active: "dashboard" }));
     });
   } else {
     app.get("/dashboard", async (_req, reply) => {
@@ -621,13 +333,13 @@ if (form) {
     app.get("/chat", async (_req, reply) => {
       const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(injectGlobalNav(html, "chat"));
+      return reply.send(injectGlobalNav(html, { active: "chat" }));
     });
 
     app.get("/chat/*", async (_req, reply) => {
       const html = fs.readFileSync(path.join(chatRoot, "index.html"), "utf8");
       reply.type("text/html; charset=utf-8");
-      return reply.send(injectGlobalNav(html, "chat"));
+      return reply.send(injectGlobalNav(html, { active: "chat" }));
     });
   } else {
     app.get("/chat", async (_req, reply) => {

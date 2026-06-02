@@ -11,6 +11,7 @@ FROM node:22-alpine AS build-admin-ui
 WORKDIR /app/admin-ui
 COPY admin-ui/package.json admin-ui/package-lock.json admin-ui/tsconfig.json admin-ui/vite.config.ts admin-ui/index.html /app/admin-ui/
 COPY admin-ui/src /app/admin-ui/src
+COPY shared-ui /app/shared-ui
 RUN npm ci --no-audit --no-fund
 RUN npm run build
 
@@ -19,6 +20,7 @@ FROM node:22-alpine AS build-chat-ui
 WORKDIR /app/chat-ui
 COPY chat-ui/package.json chat-ui/package-lock.json chat-ui/tsconfig.json chat-ui/vite.config.ts chat-ui/index.html /app/chat-ui/
 COPY chat-ui/src /app/chat-ui/src
+COPY shared-ui /app/shared-ui
 RUN npm ci --no-audit --no-fund
 RUN npm run build
 

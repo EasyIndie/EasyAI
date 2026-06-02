@@ -57,5 +57,6 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 - [部署指南](docs/deployment.md)
 - [运行手册](docs/operations.md)
 - [开发与测试](docs/development.md)
+- [前端 UI 约定](docs/frontend-ui.md)
 - [架构说明](docs/architecture.md)
 - [YAML 密钥管理](docs/yaml-secret-management.md)

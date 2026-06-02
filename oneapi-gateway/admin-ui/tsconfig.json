@@ -8,6 +8,11 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@easyai/ui": ["../shared-ui/src/index"],
+      "@easyai/ui/*": ["../shared-ui/src/*"]
+    },
     "types": ["vite/client"]
   },
   "include": ["src"]

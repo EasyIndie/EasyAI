@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { ActionBar, Button, Card, Field, Grid, Input, Inline, Page, Section, Stack, Table } from "@easyai/ui";
 
 type Tab = "usage" | "keys" | "tenants";
 
@@ -120,32 +121,8 @@ function getDeploymentLabel(appEnv?: string | null): { text: string; tone: strin
 function DeploymentBadge(props: { appEnv?: string }) {
   const { text, tone } = getDeploymentLabel(props.appEnv);
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        borderRadius: 999,
-        background: "#fff",
-        border: `1px solid ${tone}33`,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
-        color: tone,
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: 0,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: tone,
-          flexShrink: 0,
-        }}
-      />
+    <div className="ui-badge" style={{ color: tone }}>
+      <span className="ui-badge-dot" style={{ background: tone }} />
       <span>{text}</span>
     </div>
   );
@@ -278,29 +255,26 @@ function DateTimeInput(props: DateTimeInputProps) {
 
   return (
     <div ref={rootRef} style={{ position: "relative", minWidth: 0, ...style }}>
-      <button
+      <Button
         type="button"
         onClick={() => {
           if (!disabled) setOpen((v) => !v);
         }}
         disabled={disabled}
+        variant="secondary"
         style={{
           ...dateInputStyle,
           boxSizing: "border-box",
-          minHeight: 34,
-          padding: "7px 10px",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          background: disabled ? "#f6f7f8" : "#fff",
-          color: date ? "#111" : "#666",
-          cursor: disabled ? "not-allowed" : "pointer",
+          justifyContent: "flex-start",
+          color: date ? "var(--ui-text)" : "var(--ui-text-muted)",
           textAlign: "left",
         }}
       >
         {label}
-      </button>
+      </Button>
       {open && !disabled ? (
         <div
+          className="ui-surface ui-card ui-popover"
           style={{
             position: "fixed",
             top: popover?.top ?? 16,
@@ -308,16 +282,11 @@ function DateTimeInput(props: DateTimeInputProps) {
             zIndex: 1000,
             width: popover?.width ?? 280,
             padding: 10,
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            background: "#fff",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
           }}
         >
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ color: "#666", fontSize: 12 }}>日期</span>
-              <input
+          <Stack gap={10}>
+            <Field label="日期">
+              <Input
                 type="date"
                 value={date}
                 onChange={(e) => {
@@ -327,10 +296,9 @@ function DateTimeInput(props: DateTimeInputProps) {
                 }}
                 style={{ ...dateInputStyle, boxSizing: "border-box" }}
               />
-            </label>
-            <label style={{ display: "grid", gap: 5 }}>
-              <span style={{ color: "#666", fontSize: 12 }}>时间</span>
-              <input
+            </Field>
+            <Field label="时间">
+              <Input
                 type="time"
                 value={time}
                 onChange={(e) => {
@@ -341,9 +309,9 @@ function DateTimeInput(props: DateTimeInputProps) {
                 disabled={!date}
                 style={{ ...dateInputStyle, boxSizing: "border-box" }}
               />
-            </label>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 2 }}>
-              <button
+            </Field>
+            <ActionBar style={{ justifyContent: "flex-end" }}>
+              <Button
                 type="button"
                 onClick={() => {
                   setDate("");
@@ -352,14 +320,16 @@ function DateTimeInput(props: DateTimeInputProps) {
                   onCommit(null);
                   setOpen(false);
                 }}
+                variant="secondary"
+                size="sm"
               >
                 清空
-              </button>
-              <button type="button" onClick={() => setOpen(false)}>
+              </Button>
+              <Button type="button" onClick={() => setOpen(false)} variant="primary" size="sm">
                 完成
-              </button>
-            </div>
-          </div>
+              </Button>
+            </ActionBar>
+          </Stack>
         </div>
       ) : null}
     </div>
@@ -434,18 +404,14 @@ function ScopeMultiSelect(props: ScopeMultiSelectProps) {
 
   return (
     <div ref={rootRef} style={{ position: "relative", width: "100%", minWidth: 0 }}>
-      <button
+      <Button
         type="button"
+        variant="secondary"
         style={{
           boxSizing: "border-box",
           width: "100%",
-          minHeight: 34,
-          padding: "7px 10px",
-          border: "1px solid #d1d5db",
-          borderRadius: 4,
-          background: disabled ? "#f6f7f8" : "#fff",
-          color: disabled ? "#777" : "#111",
-          cursor: disabled ? "not-allowed" : "pointer",
+          justifyContent: "flex-start",
+          color: disabled ? "var(--ui-text-muted)" : "var(--ui-text)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -459,9 +425,10 @@ function ScopeMultiSelect(props: ScopeMultiSelectProps) {
         title={label}
       >
         {label}
-      </button>
+      </Button>
       {open && !disabled ? (
         <div
+          className="ui-surface ui-popover"
           style={{
             position: "fixed",
             top: popover?.top ?? 16,
@@ -471,17 +438,13 @@ function ScopeMultiSelect(props: ScopeMultiSelectProps) {
             overflow: "auto",
             zIndex: 1000,
             padding: 8,
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            background: "#fff",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.10)",
           }}
         >
           {SCOPE_OPTIONS.map((opt) => (
             <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 4px", cursor: "pointer" }}>
-              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} />
+              <Input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} />
               <span>{opt.label}</span>
-              <code style={{ color: "#666" }}>{opt.value}</code>
+              <code className="ui-muted">{opt.value}</code>
             </label>
           ))}
         </div>
@@ -543,8 +506,8 @@ function TenantPicker(props: TenantPickerProps) {
 
   return (
     <div ref={rootRef} style={{ position: "relative", width: "100%", minWidth: 0 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <Input
           type="text"
           placeholder="未绑定"
           value={open ? q : display}
@@ -605,20 +568,17 @@ function TenantPicker(props: TenantPickerProps) {
           disabled={disabled}
           style={{ width: "100%" }}
         />
-        {value ? <span style={{ color: "#666", fontSize: 12, whiteSpace: "nowrap" }}>{bound} 个密钥</span> : null}
+        {value ? <span className="ui-muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{bound} 个密钥</span> : null}
       </div>
 
       {open && !disabled ? (
         <div
+          className="ui-surface ui-popover"
           style={{
             position: "fixed",
             top: popover?.top ?? 16,
             left: popover?.left ?? 16,
             width: popover?.width ?? 260,
-            background: "#fff",
-            border: "1px solid #eee",
-            borderRadius: 8,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
             zIndex: 1000,
             maxHeight: popover?.maxHeight ?? 280,
             overflow: "auto",
@@ -633,11 +593,10 @@ function TenantPicker(props: TenantPickerProps) {
               setActive(-1);
             }}
             style={{
-              padding: "10px 12px",
-              cursor: "pointer",
-              borderBottom: "1px solid #f2f2f2",
-              background: active === -1 ? "#f6f7f8" : "#fff",
-            }}
+            padding: "10px 12px",
+            cursor: "pointer",
+            background: active === -1 ? "color-mix(in srgb, var(--ui-primary) 8%, transparent)" : "transparent",
+          }}
           >
             未绑定
           </div>
@@ -656,11 +615,11 @@ function TenantPicker(props: TenantPickerProps) {
                 cursor: "pointer",
                 display: "flex",
                 justifyContent: "space-between",
-                background: items[active] === t ? "#f6f7f8" : "#fff",
+                background: items[active] === t ? "color-mix(in srgb, var(--ui-primary) 8%, transparent)" : "transparent",
               }}
             >
               <span>{t}</span>
-              <span style={{ color: "#666" }}>{boundCountByTenant.get(t) ?? 0} 个密钥</span>
+              <span className="ui-muted">{boundCountByTenant.get(t) ?? 0} 个密钥</span>
             </div>
           ))}
         </div>
@@ -1163,75 +1122,64 @@ export function App() {
   }, [filteredKeys, keyPageClamped]);
 
   return (
-    <div style={{
-      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-      margin: "clamp(12px, 3vw, 24px)",
-      maxWidth: "100%",
-      overflowX: "hidden",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+    <Page className="ui-shell" style={{ padding: "clamp(12px, 3vw, 24px)", overflowX: "hidden" }}>
+      <Inline style={{ marginBottom: 4 }}>
         <h1 style={{ margin: 0 }}>OneAPI 管理台</h1>
         <DeploymentBadge appEnv={health?.appEnv} />
-      </div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-        gap: 12,
-        margin: "12px 0 18px",
-      }}>
-        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
-          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>网关状态</div>
-          <strong style={{ color: health?.ok ? "#137333" : "#999" }}>{health?.ok ? "Gateway online" : "Unknown"}</strong>
-        </div>
-        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
-          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>认证模式</div>
-          <strong>{health?.authModes?.join(", ") || "-"}</strong>
-        </div>
-        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
-          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>缓存</div>
-          <strong>{health ? (health.cacheEnabled ? "enabled" : "disabled") : "-"}</strong>
-        </div>
-        <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 14, background: "#fff" }}>
-          <div style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>上游</div>
-          <strong style={{ wordBreak: "break-word" }}>{health?.upstreams?.join(", ") || "-"}</strong>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <button onClick={() => setTab("usage")} disabled={tab === "usage"}>
+        <span className="ui-spacer" />
+      </Inline>
+      <Grid className="ui-stat-grid" style={{ margin: "12px 0 18px" }}>
+        <Card className="ui-stat">
+          <Section title="网关状态" description={health?.ok ? "Gateway online" : "Unknown"} />
+        </Card>
+        <Card className="ui-stat">
+          <Section title="认证模式" description={health?.authModes?.join(", ") || "-"} />
+        </Card>
+        <Card className="ui-stat">
+          <Section title="缓存" description={health ? (health.cacheEnabled ? "enabled" : "disabled") : "-"} />
+        </Card>
+        <Card className="ui-stat">
+          <Section title="上游" description={health?.upstreams?.join(", ") || "-"} />
+        </Card>
+      </Grid>
+      <div className="ui-tabbar" style={{ marginBottom: 12 }}>
+        <Button className="ui-tab" aria-selected={tab === "usage"} onClick={() => setTab("usage")} disabled={tab === "usage"} variant={tab === "usage" ? "primary" : "ghost"} size="sm">
           用量统计
-        </button>
-        <button onClick={() => setTab("keys")} disabled={tab === "keys"}>
+        </Button>
+        <Button className="ui-tab" aria-selected={tab === "keys"} onClick={() => setTab("keys")} disabled={tab === "keys"} variant={tab === "keys" ? "primary" : "ghost"} size="sm">
           API 密钥
-        </button>
-        <button onClick={() => setTab("tenants")} disabled={tab === "tenants"}>
+        </Button>
+        <Button className="ui-tab" aria-selected={tab === "tenants"} onClick={() => setTab("tenants")} disabled={tab === "tenants"} variant={tab === "tenants" ? "primary" : "ghost"} size="sm">
           租户管理
-        </button>
-        <span style={{ marginLeft: 8, color: "#666" }}>{status}</span>
+        </Button>
+        <span className="ui-muted ui-spacer" style={{ marginLeft: 8 }}>{status}</span>
       </div>
 
       <h2>{title}</h2>
 
       {tab === "usage" ? (
-        <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-            <label>
-              时间窗口（分钟）：{" "}
-              <input
+        <Section
+          title="用量统计"
+          description="按最近时间窗口查看主体、鉴权方式和租户维度的请求和错误分布。"
+        >
+          <ActionBar>
+            <Field label="时间窗口（分钟）">
+              <Input
                 type="number"
                 min={1}
                 max={1440}
                 value={sinceMinutes}
                 onChange={(e) => setSinceMinutes(Number(e.target.value))}
               />
-            </label>
-            <button onClick={loadUsage}>刷新</button>
-          </div>
+            </Field>
+            <Button onClick={loadUsage} variant="secondary" size="sm">刷新</Button>
+          </ActionBar>
 
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <Table>
             <thead>
               <tr>
                 {["主体", "鉴权方式", "租户", "API 密钥", "请求数", "错误数", "缓存命中", "P95 延迟（毫秒）", "总 Tokens"].map((h) => (
-                  <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
@@ -1240,43 +1188,46 @@ export function App() {
             <tbody>
               {usageRows.map((r) => (
                 <tr key={`${r.principal}:${r.auth_mode}:${r.tenant_id ?? ""}:${r.api_key_id ?? ""}`}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                  <td>
                     <code>{r.principal}</code>
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                  <td>
                     <code>{r.auth_mode}</code>
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    {r.tenant_id ? <code>{r.tenant_id}</code> : <span style={{ color: "#999" }}>-</span>}
+                  <td>
+                    {r.tenant_id ? <code>{r.tenant_id}</code> : <span className="ui-muted">-</span>}
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                  <td>
                     {r.api_key_id ? (
                       <code>
                         #{r.api_key_id}
                         {r.api_key_prefix ? ` (${r.api_key_prefix})` : ""}
                       </code>
                     ) : (
-                      <span style={{ color: "#999" }}>-</span>
+                      <span className="ui-muted">-</span>
                     )}
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.requests}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.errors}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.cached}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                  <td>{r.requests}</td>
+                  <td>{r.errors}</td>
+                  <td>{r.cached}</td>
+                  <td>
                     {r.p95_latency_ms ? Math.round(r.p95_latency_ms) : ""}
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{r.total_tokens ?? ""}</td>
+                  <td>{r.total_tokens ?? ""}</td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </Table>
+        </Section>
       ) : null}
 
       {tab === "keys" ? (
-        <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-            <input
+        <Section
+          title="API 密钥"
+          description="创建、筛选和维护 API 密钥。密钥相关的字段和操作都收口到统一布局。"
+        >
+          <ActionBar style={{ marginBottom: 12 }}>
+            <Input
               type="text"
               placeholder="名称，例如 prod-service"
               value={newKeyName}
@@ -1284,10 +1235,7 @@ export function App() {
               style={{ flex: "1 1 180px", minWidth: 0 }}
             />
             <div style={{ flex: "2 1 280px", minWidth: 0 }}>
-              <ScopeMultiSelect
-              value={newKeyScopes}
-                onChange={setNewKeyScopes}
-              />
+              <ScopeMultiSelect value={newKeyScopes} onChange={setNewKeyScopes} />
             </div>
             <DateTimeInput
               value={newKeyExpiresAt}
@@ -1295,8 +1243,10 @@ export function App() {
               onCommit={(value) => setNewKeyExpiresAt(value ?? "")}
               style={{ ...dateInputStyle, flex: "1 1 190px" }}
             />
-            <button onClick={createKey}>创建密钥</button>
-            <input
+            <Button onClick={createKey} variant="primary">
+              创建密钥
+            </Button>
+            <Input
               type="text"
               placeholder="搜索密钥"
               value={keySearch}
@@ -1306,37 +1256,42 @@ export function App() {
               }}
               style={{ flex: "1 1 180px", minWidth: 0 }}
             />
-            <button onClick={loadKeys}>刷新</button>
-          </div>
+            <Button onClick={loadKeys} variant="secondary">
+              刷新
+            </Button>
+          </ActionBar>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-            <button onClick={() => setKeyPage(Math.max(1, keyPageClamped - 1))} disabled={keyPageClamped <= 1}>
+          <ActionBar style={{ marginBottom: 12 }}>
+            <Button onClick={() => setKeyPage(Math.max(1, keyPageClamped - 1))} disabled={keyPageClamped <= 1} variant="ghost">
               上一页
-            </button>
-            <span style={{ color: "#666" }}>
+            </Button>
+            <span className="ui-muted">
               第 {keyPageClamped} / {keyTotalPages} 页（共 {filteredKeys.length} 个密钥）
             </span>
-            <button onClick={() => setKeyPage(Math.min(keyTotalPages, keyPageClamped + 1))} disabled={keyPageClamped >= keyTotalPages}>
+            <Button onClick={() => setKeyPage(Math.min(keyTotalPages, keyPageClamped + 1))} disabled={keyPageClamped >= keyTotalPages} variant="ghost">
               下一页
-            </button>
-          </div>
+            </Button>
+          </ActionBar>
 
           {createdKey ? (
-            <div style={{ marginBottom: 12, padding: 12, background: "#f6f7f8", borderRadius: 8 }}>
-              <div style={{ marginBottom: 6 }}>新建 API 密钥（仅展示一次）：</div>
-              <code style={{ display: "block", overflowWrap: "anywhere", wordBreak: "break-word" }}>{createdKey}</code>
-              <div style={{ marginTop: 10 }}>
-                <button onClick={() => setCreatedKey(null)}>关闭</button>
-              </div>
-            </div>
+            <Card style={{ marginBottom: 12, padding: 12 }}>
+              <Section title="新建 API 密钥（仅展示一次）">
+                <code style={{ display: "block", overflowWrap: "anywhere", wordBreak: "break-word" }}>{createdKey}</code>
+                <ActionBar style={{ marginTop: 10 }}>
+                  <Button onClick={() => setCreatedKey(null)} variant="secondary" size="sm">
+                    关闭
+                  </Button>
+                </ActionBar>
+              </Section>
+            </Card>
           ) : null}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 12 }}>
+          <Grid minChildWidth="min(100%, 420px)" gap={12}>
             {keyPageRows.map((k) => (
-              <div key={k.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 14, background: "#fff", minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+              <Card key={k.id} style={{ padding: 14, minWidth: 0 }}>
+                <ActionBar style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                   <div style={{ minWidth: 0 }}>
-                    <input
+                    <Input
                       type="text"
                       placeholder="未命名"
                       defaultValue={k.name ?? ""}
@@ -1349,15 +1304,14 @@ export function App() {
                     </code>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ color: "#666", fontSize: 12 }}>#{k.id}</div>
+                    <div className="ui-muted" style={{ fontSize: 12 }}>#{k.id}</div>
                     <code>{k.status}</code>
                   </div>
-                </div>
+                </ActionBar>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, alignItems: "start" }}>
-                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>RPM 限制</span>
-                    <input
+                <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", alignItems: "start" }}>
+                  <Field label="RPM 限制">
+                    <Input
                       type="number"
                       min={1}
                       placeholder="继承默认"
@@ -1368,20 +1322,18 @@ export function App() {
                       }}
                       disabled={Boolean(k.revoked_at)}
                     />
-                  </label>
+                  </Field>
 
-                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>过期时间</span>
+                  <Field label="过期时间">
                     <DateTimeInput
                       value={k.expires_at ? k.expires_at.slice(0, 16) : ""}
                       onCommit={(value) => updateKeyMetadata(k, { expires_at: value })}
                       disabled={Boolean(k.revoked_at)}
                       style={dateInputStyle}
                     />
-                  </label>
+                  </Field>
 
-                  <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>租户</span>
+                  <Field label="租户">
                     <TenantPicker
                       value={k.tenant_id}
                       disabled={Boolean(k.revoked_at)}
@@ -1389,55 +1341,51 @@ export function App() {
                       boundCountByTenant={boundKeyCountByTenant}
                       onCommit={(tenantId) => updateKeyTenant(k.id, tenantId)}
                     />
-                  </div>
-                </div>
+                  </Field>
+                </Grid>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 }}>
-                  <label style={{ display: "grid", gap: 6, minWidth: 0 }}>
-                    <span style={{ color: "#666", fontSize: 12 }}>Scopes</span>
+                <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginTop: 12 }}>
+                  <Field label="Scopes">
                     <ScopeMultiSelect
                       value={k.scopes ?? []}
                       disabled={Boolean(k.revoked_at)}
                       onChange={(scopes) => updateKeyMetadata(k, { scopes })}
                     />
-                  </label>
+                  </Field>
 
-                </div>
+                </Grid>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12, color: "#444", fontSize: 13 }}>
-                  <div>
-                    <div style={{ color: "#666", fontSize: 12 }}>创建时间</div>
-                    <div>{formatTime(k.created_at)}</div>
-                  </div>
-                  <div>
-                    <div style={{ color: "#666", fontSize: 12 }}>最后使用</div>
-                    <div style={{ overflowWrap: "anywhere" }}>{k.last_used_at ? `${formatTime(k.last_used_at)} ${k.last_used_ip ?? ""}` : "尚无调用"}</div>
-                  </div>
-                  <div>
-                    <div style={{ color: "#666", fontSize: 12 }}>撤销策略</div>
-                    <div>
-                      {k.revoked_at
+                <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", marginTop: 12 }}>
+                  <Section title="创建时间" description={formatTime(k.created_at)} />
+                  <Section
+                    title="最后使用"
+                    description={k.last_used_at ? `${formatTime(k.last_used_at)} ${k.last_used_ip ?? ""}` : "尚无调用"}
+                  />
+                  <Section
+                    title="撤销策略"
+                    description={
+                      k.revoked_at
                         ? `已撤销 ${formatTime(k.revoked_at)}`
                         : k.revocation_scheduled_at
                           ? `计划撤销 ${formatTime(k.revocation_scheduled_at)}`
                           : k.auto_revoke_after_unused_days
                             ? `${k.auto_revoke_after_unused_days} 天无调用自动撤销`
-                            : "-"}
-                    </div>
-                  </div>
-                </div>
+                            : "-"
+                    }
+                  />
+                </Grid>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-                  <button onClick={() => revokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                <ActionBar style={{ marginTop: 14 }}>
+                  <Button onClick={() => revokeKey(k.id)} disabled={Boolean(k.revoked_at)} variant="danger" size="sm">
                     立即撤销
-                  </button>
-                  <button onClick={() => scheduleRevokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                  </Button>
+                  <Button onClick={() => scheduleRevokeKey(k.id)} disabled={Boolean(k.revoked_at)} variant="secondary" size="sm">
                     延迟撤销
-                  </button>
-                  <button onClick={() => autoRevokeKey(k.id)} disabled={Boolean(k.revoked_at)}>
+                  </Button>
+                  <Button onClick={() => autoRevokeKey(k.id)} disabled={Boolean(k.revoked_at)} variant="secondary" size="sm">
                     闲置撤销
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => {
                       if (k.revoked_at) return;
                       if (!k.tenant_id) return;
@@ -1445,10 +1393,12 @@ export function App() {
                       updateKeyTenant(k.id, null);
                     }}
                     disabled={Boolean(k.revoked_at) || !k.tenant_id}
+                    variant="ghost"
+                    size="sm"
                   >
                     解绑
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => {
                       if (!confirm("确认删除该 API 密钥吗？")) return;
                       const force = !k.revoked_at;
@@ -1457,36 +1407,39 @@ export function App() {
                       }
                       deleteKey(k.id, force);
                     }}
+                    variant="danger"
+                    size="sm"
                   >
                     删除
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </ActionBar>
+              </Card>
             ))}
-          </div>
-        </div>
+          </Grid>
+        </Section>
       ) : null}
 
       {tab === "tenants" ? (
-        <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-            <input
+        <Section title="租户管理" description="维护租户配额、禁用状态和密钥绑定关系。">
+          <ActionBar style={{ marginBottom: 12 }}>
+            <Input
               type="text"
               placeholder="租户 ID"
               value={newTenantId}
               onChange={(e) => setNewTenantId(e.target.value)}
             />
-            <button
+            <Button
               onClick={() => {
                 const t = newTenantId.trim();
                 if (!t) return;
                 upsertTenant(t, null, null, false);
                 setNewTenantId("");
               }}
+              variant="primary"
             >
               创建或更新
-            </button>
-            <input
+            </Button>
+            <Input
               type="text"
               placeholder="搜索租户"
               value={tenantSearch}
@@ -1494,31 +1447,33 @@ export function App() {
                 setTenantSearch(e.currentTarget.value);
                 setTenantPage(1);
               }}
-              style={{ marginLeft: 10 }}
             />
-            <button onClick={loadTenants}>刷新</button>
-          </div>
+            <Button onClick={loadTenants} variant="secondary">
+              刷新
+            </Button>
+          </ActionBar>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-            <button onClick={() => setTenantPage(Math.max(1, tenantPageClamped - 1))} disabled={tenantPageClamped <= 1}>
+          <ActionBar style={{ marginBottom: 12 }}>
+            <Button onClick={() => setTenantPage(Math.max(1, tenantPageClamped - 1))} disabled={tenantPageClamped <= 1} variant="ghost">
               上一页
-            </button>
-            <span style={{ color: "#666" }}>
+            </Button>
+            <span className="ui-muted">
               第 {tenantPageClamped} / {tenantTotalPages} 页（共 {filteredTenants.length} 个租户）
             </span>
-            <button
+            <Button
               onClick={() => setTenantPage(Math.min(tenantTotalPages, tenantPageClamped + 1))}
               disabled={tenantPageClamped >= tenantTotalPages}
+              variant="ghost"
             >
               下一页
-            </button>
-          </div>
+            </Button>
+          </ActionBar>
 
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <Table>
             <thead>
               <tr>
                 {["租户", "创建时间", "已绑定密钥", "RPM 限制", "TPM 限制", "禁用", "操作"].map((h) => (
-                  <th key={h} style={{ borderBottom: "1px solid #eee", padding: 10, textAlign: "left" }}>
+                  <th key={h}>
                     {h}
                   </th>
                 ))}
@@ -1527,22 +1482,22 @@ export function App() {
             <tbody>
               {tenantPageRows.map((t) => (
                 <tr key={t.tenant_id}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
+                  <td>
                     <code>{t.tenant_id}</code>
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{formatTime(t.created_at)}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>{boundKeyCountByTenant.get(t.tenant_id) ?? 0}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <input type="number" min={1} defaultValue={t.rpm_limit ?? undefined} id={`rpm-${t.tenant_id}`} />
+                  <td>{formatTime(t.created_at)}</td>
+                  <td>{boundKeyCountByTenant.get(t.tenant_id) ?? 0}</td>
+                  <td>
+                    <Input type="number" min={1} defaultValue={t.rpm_limit ?? undefined} id={`rpm-${t.tenant_id}`} />
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <input type="number" min={1} defaultValue={t.tpm_limit ?? undefined} id={`tpm-${t.tenant_id}`} />
+                  <td>
+                    <Input type="number" min={1} defaultValue={t.tpm_limit ?? undefined} id={`tpm-${t.tenant_id}`} />
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <input type="checkbox" defaultChecked={t.disabled} id={`dis-${t.tenant_id}`} />
+                  <td>
+                    <Input type="checkbox" defaultChecked={t.disabled} id={`dis-${t.tenant_id}`} />
                   </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 10 }}>
-                    <button
+                  <td>
+                    <Button
                       onClick={() => {
                         const rpmEl = document.getElementById(`rpm-${t.tenant_id}`) as HTMLInputElement | null;
                         const tpmEl = document.getElementById(`tpm-${t.tenant_id}`) as HTMLInputElement | null;
@@ -1554,10 +1509,12 @@ export function App() {
                         const dis = Boolean(disEl?.checked);
                         upsertTenant(t.tenant_id, rpm, tpm, dis);
                       }}
+                      variant="primary"
+                      size="sm"
                     >
                       保存
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
                         if (!confirm(`确认删除租户 "${t.tenant_id}" 吗？`)) return;
@@ -1569,10 +1526,12 @@ export function App() {
                         }
                         deleteTenant(t.tenant_id, false);
                       }}
+                      variant="danger"
+                      size="sm"
                     >
                       删除
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       style={{ marginLeft: 8 }}
                       onClick={() => {
                         const bound = boundKeyCountByTenant.get(t.tenant_id) ?? 0;
@@ -1581,17 +1540,19 @@ export function App() {
                         unbindTenantKeys(t.tenant_id);
                       }}
                       disabled={(boundKeyCountByTenant.get(t.tenant_id) ?? 0) <= 0}
+                      variant="secondary"
+                      size="sm"
                     >
                       解绑全部密钥
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+          </Table>
+        </Section>
       ) : null}
 
-    </div>
+    </Page>
   );
 }

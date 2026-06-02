@@ -3,6 +3,7 @@ import fastifyStatic from "@fastify/static";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { Config } from "./config.js";
+import { buildGlobalNav, buildThemeInitScript } from "./ui-shell.js";
 
 const require = createRequire(import.meta.url);
 const swaggerUiAssetRoot = path.dirname(require.resolve("swagger-ui-dist/swagger-ui-bundle.js"));
@@ -235,92 +236,52 @@ window.ui = SwaggerUIBundle({
     return `<!doctype html>
 <html>
   <head>
+    ${buildThemeInitScript()}
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OneAPI Gateway API Docs</title>
     <link rel="stylesheet" href="/docs/assets/swagger-ui.css" />
     <style>
-      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-      .easyai-nav {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 16px;
-        border-bottom: 1px solid #e5e7eb;
-        background: #fff;
-        position: fixed;
-        left: 0;
-        right: 0;
-        top: 0;
-        z-index: 1000;
+      body {
+        margin: 0;
+        font-family: var(--ui-font-sans);
       }
-      .easyai-nav-spacer {
-        height: 57px;
+      #swagger-ui {
+        padding: 8px 16px 32px;
       }
-      .easyai-nav-left {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
+      .swagger-ui,
+      .swagger-ui .info .title,
+      .swagger-ui .opblock-tag,
+      .swagger-ui table thead tr td,
+      .swagger-ui table thead tr th,
+      .swagger-ui .parameter__name,
+      .swagger-ui .response-col_status {
+        color: var(--ui-text);
       }
-      .easyai-nav-brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-        color: #172033;
-        font-size: 18px;
-        font-weight: 700;
+      .swagger-ui .info .base-url,
+      .swagger-ui .info p,
+      .swagger-ui .parameter__type,
+      .swagger-ui .response-col_description__inner,
+      .swagger-ui .model-title {
+        color: var(--ui-text-muted);
       }
-      .easyai-nav-logo {
-        width: 36px;
-        height: 36px;
-        border-radius: 6px;
-        background: #1769aa;
-        color: #fff;
-        display: grid;
-        place-items: center;
-        font-size: 14px;
-        font-weight: 800;
-        line-height: 1;
+      .swagger-ui .scheme-container,
+      .swagger-ui .opblock,
+      .swagger-ui section.models {
+        border-color: var(--ui-border);
+        background: var(--ui-bg-elevated);
+        box-shadow: var(--ui-shadow-soft);
       }
-      .easyai-nav-tabs {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .easyai-nav-link {
-        color: #4b5563;
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 600;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 6px 10px;
-        background: #fff;
-      }
-      .easyai-nav-link.is-active {
-        color: #0f4f87;
-        border-color: #c7def4;
-        background: #eef6ff;
+      html[data-theme="dark"] .swagger-ui input,
+      html[data-theme="dark"] .swagger-ui textarea,
+      html[data-theme="dark"] .swagger-ui select {
+        color: var(--ui-text);
+        background: var(--ui-bg-strong);
       }
     </style>
   </head>
-  <body>
-    <nav class="easyai-nav" data-easyai-global-nav="1">
-      <div class="easyai-nav-left">
-        <a class="easyai-nav-brand" href="/" aria-label="返回首页" title="返回首页">
-          <span class="easyai-nav-logo">AI</span>
-          <span>EasyAI Console</span>
-        </a>
-      </div>
-      <div class="easyai-nav-tabs">
-        <a class="easyai-nav-link" href="/chat">会话</a>
-        <a class="easyai-nav-link is-active" href="/docs">API 文档</a>
-        <a class="easyai-nav-link" href="/dashboard">Dashboard</a>
-      </div>
-    </nav>
-    <div class="easyai-nav-spacer" aria-hidden="true"></div>
+  <body class="easyai-page-docs">
+    ${buildGlobalNav({ active: "docs" })}
     <div id="swagger-ui"></div>
     <script src="/docs/assets/swagger-ui-bundle.js"></script>
     <script src="/docs/init.js"></script>

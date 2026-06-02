@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActionBar, Button, Center, Field, Grid, Input, Inline, Select, Section, Stack, TextArea } from "@easyai/ui";
 import { createClientId } from "./id";
 import { shouldApplyLoadedMessages } from "./messageLoad";
 import { parseSseDataEvents } from "./stream";
@@ -92,6 +93,10 @@ function truncate(s: string, n: number): string {
   return s.slice(0, n - 1) + "…";
 }
 
+function cx(...parts: Array<string | undefined | false | null>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 function formatTime(s: string): string {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
@@ -167,32 +172,8 @@ function getDeploymentLabel(appEnv?: string | null): { text: string; tone: strin
 function DeploymentBadge(props: { appEnv?: string }) {
   const { text, tone } = getDeploymentLabel(props.appEnv);
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        borderRadius: 999,
-        background: "#fff",
-        border: `1px solid ${tone}33`,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
-        color: tone,
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: 0,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: tone,
-          flexShrink: 0,
-        }}
-      />
+    <div className="ui-badge" style={{ color: tone }}>
+      <span className="ui-badge-dot" style={{ background: tone }} />
       <span>{text}</span>
     </div>
   );
@@ -814,70 +795,35 @@ export function App() {
 
   if (!apiKey) {
     return (
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100%",
-        height: "100%",
-        background: "#f5f5f5",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-      }}>
-        <div style={{
-          background: "#fff",
-          padding: 40,
-          borderRadius: 16,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-          width: 400,
-          maxWidth: "90vw",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px" }}>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>EasyAI Chat</h1>
+      <Center className="ui-shell">
+        <Section
+          className="ui-surface ui-chat-login"
+          title="EasyAI Chat"
+          description="请输入 API Key 开始使用。若聊天返回 model not found，请先在服务端拉取配置中的 Ollama 模型。"
+        >
+          <ActionBar style={{ marginBottom: 8 }}>
             <DeploymentBadge appEnv={health?.appEnv} />
-          </div>
-          <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14 }}>
-            请输入 API Key 开始使用。若聊天返回 model not found，请先在服务端拉取配置中的 Ollama 模型。
-          </p>
-          <input
-            type="password"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            placeholder="sk-..."
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              fontSize: 14,
-              boxSizing: "border-box",
-              marginBottom: 16,
-            }}
-          />
-          <button
-            onClick={handleLogin}
-            disabled={!keyInput.trim()}
-            style={{
-              width: "100%",
-              padding: "12px",
-              borderRadius: 8,
-              border: "none",
-              background: keyInput.trim() ? "#1a73e8" : "#ccc",
-              color: "#fff",
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: keyInput.trim() ? "pointer" : "default",
-            }}
-          >
+          </ActionBar>
+          <Field label="API Key" hint="本地仅保存到浏览器 localStorage。">
+            <Input
+              type="password"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              placeholder="sk-..."
+              fullWidth
+            />
+          </Field>
+          <Button onClick={handleLogin} disabled={!keyInput.trim()} variant="primary" block>
             登录
-          </button>
+          </Button>
           {loginError && (
             <div style={{ marginTop: 12, color: "#d93025", fontSize: 13 }}>
               {loginError}
             </div>
           )}
-        </div>
-      </div>
+        </Section>
+      </Center>
     );
   }
 
@@ -885,73 +831,50 @@ export function App() {
   const modelList = models;
 
   return (
-    <div style={{
-      display: "flex",
-      minHeight: "100%",
-      height: "100%",
-      overflow: "hidden",
-      minWidth: 0,
-      fontFamily: "system-ui, -apple-system, sans-serif",
-      color: "#1a1a1a",
-    }}>
+    <div className="ui-shell ui-layout-chat">
       {/* Sidebar */}
-      <div style={{
-        width: sidebarWidth,
-        minWidth: sidebarWidth,
-        minHeight: 0,
-        background: "#f8f9fa",
-        borderRight: "1px solid #e8e8e8",
-        display: "flex",
-        flexDirection: "column",
-      }}>
-        <div style={{ padding: 16, borderBottom: "1px solid #e8e8e8" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 12px" }}>
+      <div className="ui-sidebar" style={{ minHeight: 0 }}>
+        <Section className="ui-chat-sidebar-header">
+          <Inline style={{ marginBottom: 12 }}>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>EasyAI Chat</h2>
             <DeploymentBadge appEnv={health?.appEnv} />
-          </div>
-          <button
+          </Inline>
+          <Button
             onClick={handleNewConversation}
             disabled={isStreaming}
+            variant="dashed"
+            block
             style={{
-              width: "100%",
-              padding: "10px 16px",
-              borderRadius: 8,
-              border: "1px dashed #ccc",
-              background: "transparent",
-              color: isStreaming ? "#999" : "#1a73e8",
+              color: isStreaming ? "var(--ui-text-muted)" : "var(--ui-primary)",
               fontSize: 14,
-              cursor: isStreaming ? "default" : "pointer",
             }}
           >
             + 新建对话
-          </button>
-        </div>
+          </Button>
+        </Section>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: 8 }}>
+        <div className="ui-chat-conversation-list">
           {convLoading && conversations.length === 0 ? (
-            <div style={{ padding: 16, color: "#999", fontSize: 13, textAlign: "center" }}>加载中...</div>
+            <div className="ui-muted" style={{ padding: 16, fontSize: 13, textAlign: "center" }}>加载中...</div>
           ) : conversations.length === 0 ? (
-            <div style={{ padding: 16, color: "#999", fontSize: 13, textAlign: "center" }}>暂无对话</div>
+            <div className="ui-muted" style={{ padding: 16, fontSize: 13, textAlign: "center" }}>暂无对话</div>
           ) : (
             conversations.map((conv) => (
               <div
                 key={conv.id}
                 onClick={() => handleSelectConversation(conv.id)}
+                className={cx(
+                  "ui-chat-conversation-item",
+                  conv.id === currentId && "ui-chat-conversation-active",
+                )}
                 style={{
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  marginBottom: 4,
                   cursor: isStreaming ? "default" : "pointer",
-                  background: conv.id === currentId ? "#e8f0fe" : "transparent",
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "flex-start",
                   opacity: isStreaming ? 0.6 : 1,
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {renamingId === conv.id ? (
-                    <input
+                    <Input
                       value={renameInput}
                       onChange={(e) => setRenameInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -973,16 +896,8 @@ export function App() {
                       }}
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      style={{
-                        width: "100%",
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        border: "1px solid #1a73e8",
-                        fontSize: 14,
-                        fontFamily: "inherit",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      className="ui-input"
+                      style={{ width: "100%", padding: "2px 6px", fontSize: 14 }}
                     />
                   ) : (
                     <div
@@ -991,12 +906,9 @@ export function App() {
                         setRenamingId(conv.id);
                         setRenameInput(conv.title || "");
                       }}
+                      className="ui-chat-conversation-name"
                       style={{
-                        fontSize: 14,
                         fontWeight: conv.id === currentId ? 600 : 400,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
                         cursor: isStreaming ? "default" : "text",
                       }}
                       title="点击重命名"
@@ -1004,115 +916,72 @@ export function App() {
                       {conv.title || "新对话"}
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
+                  <div className="ui-chat-conversation-meta">
                     {conv.message_count} 条消息 · {formatTime(conv.updated_at)}
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={(e) => {
                     e.stopPropagation();
                     requestDeleteConversation(conv.id, conv.title);
                   }}
                   disabled={isStreaming}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    color: "#ccc",
-                    cursor: isStreaming ? "default" : "pointer",
-                    fontSize: 16,
-                    padding: "2px 4px",
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
+                  variant="ghost"
+                  size="sm"
+                  style={{ color: "#94a3b8", padding: "2px 4px", lineHeight: 1, flexShrink: 0 }}
                   title="删除对话"
                 >
                   ×
-                </button>
+                </Button>
               </div>
             ))
           )}
         </div>
 
-        <div style={{
-          padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
-          borderTop: "1px solid #e8e8e8",
-          fontSize: 12,
-          color: "#999",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}>
+        <div className="ui-chat-footer">
           <span title={apiKey}>{truncate(apiKey, 24)}</span>
-          <button
+          <Button
             onClick={handleLogout}
+            variant="ghost"
             style={{
-              border: "none",
-              background: "transparent",
-              color: "#999",
-              cursor: "pointer",
               fontSize: 12,
               textDecoration: "underline",
             }}
           >
             退出
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Main area */}
-      <div style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        minWidth: 0,
-        background: "#fff",
-      }}>
+      <div className="ui-main ui-chat-main">
         {/* Top bar */}
-        <div style={{
-          padding: "12px 24px",
-          borderBottom: "1px solid #e8e8e8",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}>
-          <button
+        <ActionBar className="ui-chat-topbar">
+          <Button
             onClick={() => setViewMode("chat")}
+            variant={viewMode === "chat" ? "primary" : "ghost"}
+            size="sm"
             style={{
-              border: "1px solid #ddd",
-              background: viewMode === "chat" ? "#1a73e8" : "transparent",
-              color: viewMode === "chat" ? "#fff" : "#666",
-              borderRadius: 6,
-              padding: "4px 10px",
               fontSize: 12,
-              cursor: "pointer",
             }}
           >
             对话
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setViewMode("test")}
+            variant={viewMode === "test" ? "primary" : "ghost"}
+            size="sm"
             style={{
-              border: "1px solid #ddd",
-              background: viewMode === "test" ? "#1a73e8" : "transparent",
-              color: viewMode === "test" ? "#fff" : "#666",
-              borderRadius: 6,
-              padding: "4px 10px",
               fontSize: 12,
-              cursor: "pointer",
             }}
           >
             模型测试
-          </button>
-          <select
+          </Button>
+          <Select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
             disabled={isStreaming || modelList.length === 0}
             style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid #ddd",
               fontSize: 13,
               minWidth: 200,
             }}
@@ -1121,211 +990,135 @@ export function App() {
             {modelList.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
-          </select>
+          </Select>
 
-          <button
+          <Button
             onClick={() => setShowSettings(!showSettings)}
+            variant="ghost"
+            size="sm"
             style={{
-              border: "1px solid #ddd",
-              background: "transparent",
-              borderRadius: 6,
-              padding: "4px 10px",
               fontSize: 12,
-              color: "#666",
-              cursor: "pointer",
+              color: "var(--ui-text-muted)",
             }}
           >
             {showSettings ? "收起" : "参数"}
-          </button>
+          </Button>
 
           {isStreaming && (
-            <button
+            <Button
               onClick={handleStop}
-              style={{
-                border: "none",
-                background: "#e74c3c",
-                color: "#fff",
-                borderRadius: 6,
-                padding: "4px 14px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              variant="danger"
+              size="sm"
+              style={{ fontSize: 12 }}
             >
               停止
-            </button>
+            </Button>
           )}
 
           {viewMode === "test" && testLoading && (
-            <button
+            <Button
               onClick={handleStopTest}
-              style={{
-                border: "none",
-                background: "#e74c3c",
-                color: "#fff",
-                borderRadius: 6,
-                padding: "4px 14px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              variant="danger"
+              size="sm"
+              style={{ fontSize: 12 }}
             >
               停止测试
-            </button>
+            </Button>
           )}
 
-          {status && (
-            <span style={{ fontSize: 12, color: "#666", marginLeft: "auto" }}>{status}</span>
-          )}
+          {status && <span className="ui-muted ui-spacer" style={{ fontSize: 12 }}>{status}</span>}
           {currentConv && (
-            <button
+            <Button
               onClick={handleCloseConversation}
               disabled={isStreaming}
+              variant="ghost"
+              size="sm"
               style={{
-                border: "1px solid #ddd",
-                background: "transparent",
-                borderRadius: 6,
-                padding: "4px 10px",
                 fontSize: 12,
-                color: isStreaming ? "#999" : "#666",
-                cursor: isStreaming ? "default" : "pointer",
+                color: "var(--ui-text-muted)",
               }}
             >
               关闭会话
-            </button>
+            </Button>
           )}
           {currentConv && (
-            <button
+            <Button
               onClick={() => requestDeleteConversation(currentConv.id, currentConv.title)}
               disabled={isStreaming}
+              variant="danger"
+              size="sm"
               style={{
-                border: "1px solid #f5c2c2",
-                background: "#fff5f5",
-                borderRadius: 6,
-                padding: "4px 10px",
                 fontSize: 12,
-                color: isStreaming ? "#caa" : "#d93025",
-                cursor: isStreaming ? "default" : "pointer",
+                color: "#fff",
               }}
-            >
-              删除会话
-            </button>
+              >
+                删除会话
+              </Button>
           )}
-        </div>
+        </ActionBar>
 
         {viewMode === "chat" ? (
           <>
             {/* Settings panel */}
             {showSettings && (
-              <div style={{
-                padding: "12px 24px",
-                borderBottom: "1px solid #e8e8e8",
-                display: "flex",
-                gap: 24,
-                fontSize: 13,
-                background: "#fafafa",
-                flexWrap: "wrap",
-              }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#666" }}>温度:</span>
-                  <input
+              <ActionBar className="ui-chat-settings">
+                <Field label="温度" style={{ minWidth: 130 }}>
+                  <Input
                     type="number"
                     step="0.1"
                     min={0}
                     max={2}
                     value={temperature}
                     onChange={(e) => setTemperature(e.target.value)}
-                    style={{ width: 70, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
+                    style={{ width: 70, fontSize: 13 }}
                   />
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "#666" }}>最大 Tokens:</span>
-                  <input
+                </Field>
+                <Field label="最大 Tokens" style={{ minWidth: 160 }}>
+                  <Input
                     type="number"
                     min={1}
                     max={32768}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(e.target.value)}
-                    style={{ width: 90, padding: "4px 8px", borderRadius: 4, border: "1px solid #ddd", fontSize: 13 }}
+                    style={{ width: 90, fontSize: 13 }}
                   />
-                </label>
-              </div>
+                </Field>
+              </ActionBar>
             )}
 
             {/* Messages */}
-            <div style={{
-              flex: 1,
-              overflow: "auto",
-              minHeight: 0,
-              WebkitOverflowScrolling: "touch",
-              overscrollBehavior: "contain",
-              padding: 24,
-            }} ref={messagesScrollRef}>
+              <div className="ui-chat-messages" ref={messagesScrollRef}>
               {!currentConv && (
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: "100%",
-                  color: "#ccc",
-                  fontSize: 16,
-                }}>
-                  <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }}>💬</div>
+                <Center className="ui-chat-empty">
+                  <div className="ui-chat-empty-icon">💬</div>
                   <div>选择或创建一个对话开始聊天</div>
-                </div>
+                </Center>
               )}
 
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  style={{
-                    marginBottom: 20,
-                    display: "flex",
-                    justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                  }}
+                  className={cx(
+                    "ui-chat-message-row",
+                    msg.role === "user" ? "ui-chat-message-row--user" : "ui-chat-message-row--assistant",
+                  )}
                 >
-                  <div style={{
-                    maxWidth: "75%",
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    background: msg.role === "user" ? "#1a73e8" : "#f0f0f0",
-                    color: msg.role === "user" ? "#fff" : "#1a1a1a",
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "break-word",
-                  }}>
+                  <div
+                    className={cx(
+                      "ui-chat-message-bubble",
+                      msg.role === "user" ? "ui-chat-message-bubble--user" : "ui-chat-message-bubble--assistant",
+                    )}
+                  >
                     {msg.content}
                   </div>
                 </div>
               ))}
 
               {isStreaming && (
-                <div style={{
-                  marginBottom: 20,
-                  display: "flex",
-                  justifyContent: "flex-start",
-                }}>
-                  <div style={{
-                    maxWidth: "75%",
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    background: "#f0f0f0",
-                    color: "#1a1a1a",
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "break-word",
-                  }}>
+                <div className="ui-chat-message-row ui-chat-message-row--assistant">
+                  <div className="ui-chat-message-bubble ui-chat-message-bubble--assistant">
                     {streamContent}
-                    <span style={{
-                      display: "inline-block",
-                      width: 8,
-                      height: 16,
-                      background: "#1a73e8",
-                      marginLeft: 2,
-                      animation: "blink 1s infinite",
-                      verticalAlign: "middle",
-                    }} />
+                    <span className="ui-chat-message-caret" />
                   </div>
                 </div>
               )}
@@ -1334,17 +1127,9 @@ export function App() {
             </div>
 
             {/* Input area */}
-            <div style={{
-              padding: "16px 24px calc(16px + env(safe-area-inset-bottom, 0px))",
-              borderTop: "1px solid #e8e8e8",
-              background: "#fafafa",
-            }}>
-              <div style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "flex-end",
-              }}>
-                <textarea
+            <div className="ui-chat-input-panel">
+              <Inline gap={12} align="flex-end">
+                <TextArea
                   ref={inputRef}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
@@ -1354,143 +1139,104 @@ export function App() {
                   rows={2}
                   style={{
                     flex: 1,
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
                     fontSize: 14,
-                    fontFamily: "inherit",
                     resize: "none",
                     lineHeight: 1.5,
                   }}
                 />
-                <button
+                <Button
                   onClick={handleSend}
                   disabled={!inputText.trim() || isStreaming || !selectedModel}
+                  variant="primary"
                   style={{
-                    padding: "10px 24px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: inputText.trim() && !isStreaming && selectedModel ? "#1a73e8" : "#ccc",
-                    color: "#fff",
                     fontSize: 14,
                     fontWeight: 600,
-                    cursor: inputText.trim() && !isStreaming && selectedModel ? "pointer" : "default",
                     whiteSpace: "nowrap",
                   }}
                 >
                   发送
-                </button>
-              </div>
+                </Button>
+              </Inline>
             </div>
           </>
         ) : (
-          <div style={{
-            flex: 1,
-            overflow: "auto",
-            padding: 24,
-          }}>
-            <div style={{ display: "grid", gap: 12 }}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ color: "#666", fontSize: 13 }}>系统提示词</span>
-                <textarea
+          <Section
+            className="ui-chat-test-panel"
+            title="模型测试"
+            description="用于快速验证系统提示词、用户输入和模型输出。"
+          >
+            <Stack gap={12} className="ui-chat-test-grid">
+              <Field label="系统提示词">
+                <TextArea
                   value={testSystemPrompt}
                   onChange={(e) => setTestSystemPrompt(e.target.value)}
                   rows={4}
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
                     fontSize: 14,
-                    fontFamily: "inherit",
                     resize: "vertical",
                     lineHeight: 1.5,
-                    boxSizing: "border-box",
                   }}
                 />
-              </label>
+              </Field>
 
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ color: "#666", fontSize: 13 }}>用户消息</span>
-                <textarea
+              <Field label="用户消息">
+                <TextArea
                   value={testUserPrompt}
                   onChange={(e) => setTestUserPrompt(e.target.value)}
                   rows={8}
                   placeholder="请输入要测试的问题或指令"
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
                     fontSize: 14,
-                    fontFamily: "inherit",
                     resize: "vertical",
                     lineHeight: 1.5,
-                    boxSizing: "border-box",
                   }}
                 />
-              </label>
-            </div>
+              </Field>
+            </Stack>
 
-            <div style={{
-              display: "flex",
-              gap: 16,
-              alignItems: "center",
-              marginTop: 14,
-              color: "#666",
-              fontSize: 13,
-              flexWrap: "wrap",
-            }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
+            <ActionBar style={{ marginTop: 14, color: "var(--ui-text-muted)", fontSize: 13 }}>
+              <Inline gap={8} wrap={false}>
+                <Input
                   type="checkbox"
                   checked={testStream}
                   onChange={(e) => setTestStream(e.currentTarget.checked)}
                 />
                 流式输出
-              </label>
+              </Inline>
               <span>模型数量：{modelList.length}</span>
               <span>调用模型：{selectedModel || "未选择"}</span>
-              {modelList.length === 0 ? <span style={{ color: "#b45309" }}>提示：当前没有可调用模型</span> : null}
+              {modelList.length === 0 ? <span style={{ color: "var(--ui-warning)" }}>提示：当前没有可调用模型</span> : null}
               <span>温度：{temperature}</span>
               <span>最大 Tokens：{maxTokens}</span>
               {testLatencyMs !== null ? <span>耗时：{testLatencyMs} ms</span> : null}
               {testUsage ? <span>{testUsage}</span> : null}
-            </div>
+            </ActionBar>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <button
+            <ActionBar style={{ marginTop: 16 }}>
+              <Button
                 onClick={runTest}
                 disabled={testLoading || !selectedModel.trim()}
+                variant="primary"
                 style={{
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: testLoading || !selectedModel.trim() ? "#ccc" : "#1a73e8",
-                  color: "#fff",
                   fontSize: 14,
                   fontWeight: 600,
-                  cursor: testLoading || !selectedModel.trim() ? "default" : "pointer",
                 }}
               >
                 {testLoading ? "请求中..." : "发送测试请求"}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleStopTest}
                 disabled={!testLoading}
+                variant="secondary"
                 style={{
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  color: "#666",
                   fontSize: 14,
-                  cursor: testLoading ? "pointer" : "default",
                 }}
               >
                 停止输出
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
                   setTestUserPrompt("");
                   setTestResult("");
@@ -1499,123 +1245,81 @@ export function App() {
                   setTestLatencyMs(null);
                 }}
                 disabled={testLoading}
+                variant="secondary"
                 style={{
-                  padding: "10px 18px",
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  color: "#666",
                   fontSize: 14,
-                  cursor: testLoading ? "default" : "pointer",
                 }}
               >
                 清空结果
-              </button>
-            </div>
+              </Button>
+            </ActionBar>
 
-            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-              <div>
-                <div style={{ marginBottom: 6, fontWeight: 600 }}>模型返回</div>
-                <textarea
+            <Grid gap={12} style={{ marginTop: 18 }}>
+              <Section title="模型返回">
+                <TextArea
                   readOnly
                   value={testResult}
                   rows={10}
                   placeholder="请求返回内容会显示在这里"
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
                     fontSize: 14,
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                     resize: "vertical",
                     lineHeight: 1.5,
-                    boxSizing: "border-box",
                   }}
                 />
-              </div>
+              </Section>
 
-              <div>
-                <div style={{ marginBottom: 6, fontWeight: 600 }}>原始 JSON</div>
-                <textarea
+              <Section title="原始 JSON">
+                <TextArea
                   readOnly
                   value={testRaw}
                   rows={16}
                   placeholder="原始响应 JSON 会显示在这里"
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
                     fontSize: 13,
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                     resize: "vertical",
                     lineHeight: 1.5,
-                    boxSizing: "border-box",
                   }}
                 />
-              </div>
-            </div>
-          </div>
+              </Section>
+            </Grid>
+          </Section>
         )}
       </div>
       {pendingDelete && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setPendingDelete(null)}
-        >
+        <div className="ui-dialog-overlay" onClick={() => setPendingDelete(null)}>
           <div
-            style={{
-              width: 420,
-              maxWidth: "92vw",
-              background: "#fff",
-              borderRadius: 12,
-              boxShadow: "0 12px 36px rgba(0,0,0,0.2)",
-              padding: 20,
-            }}
+            className="ui-dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>确认删除会话？</div>
-            <div style={{ fontSize: 14, color: "#555", lineHeight: 1.6, marginBottom: 16 }}>
-              该操作不可撤销。将删除会话及其全部消息：<br />
-              <span style={{ color: "#111", fontWeight: 600 }}>{pendingDelete.title}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button
+            <Stack gap={10} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>确认删除会话？</div>
+              <div style={{ fontSize: 14, color: "var(--ui-text-muted)", lineHeight: 1.6 }}>
+                该操作不可撤销。将删除会话及其全部消息：<br />
+                <span style={{ color: "var(--ui-text)", fontWeight: 600 }}>{pendingDelete.title}</span>
+              </div>
+            </Stack>
+            <div className="ui-dialog-actions">
+              <Button
                 onClick={() => setPendingDelete(null)}
+                variant="secondary"
                 style={{
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 14px",
                   fontSize: 14,
-                  cursor: "pointer",
                 }}
               >
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={confirmDeleteConversation}
+                variant="danger"
                 style={{
-                  border: "1px solid #d93025",
-                  background: "#d93025",
-                  color: "#fff",
-                  borderRadius: 8,
-                  padding: "8px 14px",
                   fontSize: 14,
-                  cursor: "pointer",
                 }}
               >
                 确认删除
-              </button>
+              </Button>
             </div>
           </div>
         </div>
