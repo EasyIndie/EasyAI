@@ -33,6 +33,8 @@ curl -sS http://localhost:3004/v1/chat/completions \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
+启动顺序：`redis` / `postgres` 带健康检查，`litellm` 等数据库就绪后再做 Prisma 迁移，`oneapi` 与 `batch_worker` 等数据库和 Redis 就绪后启动；网关不阻塞等待 LiteLLM，未就绪时 `/v1` 返回 503。
+
 ## 2. 生产环境（本地私有配置）
 
 ```bash
@@ -90,6 +92,9 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 | `guardrails` | 可选：`blocked_keywords`、`mask_pii`（交给 LiteLLM 内置内容过滤） |
 
 `app.timeout_ms` 是模型请求超时；网关在转发时会多等 5 秒，避免网关先于 LiteLLM 超时。
+
+数据库隔离：LiteLLM 使用同一个 Postgres 里的 `litellm` schema（`...?schema=litellm`），EasyAI 的业务表在 `public`。
+这样 Prisma 迁移不会和 EasyAI 的表冲突；以前版本遗留在 `public` 下的旧表不会再被使用，可以忽略或手动删除。
 
 生产安全开关：
 

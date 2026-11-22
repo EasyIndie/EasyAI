@@ -6,6 +6,11 @@ services:
   redis:
     image: redis:8.6.3-alpine
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   postgres:
     image: postgres:18.4-alpine
@@ -16,6 +21,11 @@ services:
       POSTGRES_DB: oneapi
     volumes:
       - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oneapi -d oneapi"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
   ollama:
     image: ollama/ollama:latest
@@ -38,9 +48,12 @@ services:
       - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
       - ./scripts:/app/scripts:ro
     depends_on:
-      - ollama
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
 
   # EasyAI gateway: single entrypoint, chat UI, batch API.
   oneapi:
@@ -52,9 +65,12 @@ services:
     volumes:
       - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
     depends_on:
-      - redis
-      - postgres
-      - litellm
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
 
   # Optional chat UI (中文，多用户/RAG/工具). Enable with:
   #   docker compose --profile chat up -d
@@ -73,7 +89,8 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
     depends_on:
-      - oneapi
+      oneapi:
+        condition: service_started
 
   batch_worker:
     build:
@@ -82,9 +99,12 @@ services:
     volumes:
       - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
     depends_on:
-      - redis
-      - postgres
-      - oneapi
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      oneapi:
+        condition: service_started
 
 volumes:
   openwebui_data:

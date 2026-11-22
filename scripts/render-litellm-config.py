@@ -40,7 +40,9 @@ def database_url(cfg: Dict[str, Any]) -> str:
     secrets = cfg.get("secrets") or {}
     app_cfg = cfg.get("app") or {}
     password = str(secrets.get("postgres_password") or "oneapi")
-    return f"postgresql://oneapi:{password}@postgres:5432/oneapi"
+    # Keep LiteLLM's tables out of EasyAI's `public` schema: Prisma refuses to
+    # migrate a database that has foreign tables but no migration history.
+    return f"postgresql://oneapi:{password}@postgres:5432/oneapi?schema=litellm"
 
 
 def salt_key(cfg: Dict[str, Any]) -> str:
