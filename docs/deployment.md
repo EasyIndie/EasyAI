@@ -1,10 +1,10 @@
 # 部署指南（Deployment）
 
-本文档汇总本仓库支持的部署方式：完整模式（OneAPI 网关 + LiteLLM + 数据库组件 + Batch Worker + Ollama）。
+本文档汇总本仓库支持的部署方式：完整模式（EasyAI 网关 + LiteLLM Proxy + 数据库组件 + Batch Worker + Ollama）。
 
 ## 1. 完整模式
 
-此模式适合在生产环境中提供完整的 API 管理、鉴权、限流、审计、缓存以及异步任务（Batch）功能。
+此模式适合在生产环境中提供统一的模型接入、密钥与预算治理、限流、用量审计、响应缓存以及异步任务（Batch）功能。
 
 ### 1.1 开发环境部署步骤（Docker Compose）
 
@@ -20,7 +20,7 @@ docker compose up -d --build
 
 ```bash
 curl -sS http://localhost:3004/healthz
-docker compose exec -T litellm python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
+curl -sS http://localhost:3004/v1/models -H "Authorization: Bearer dev-key"
 ```
 
 步骤 2.5：准备本地 Ollama 模型（仅当 `models.chat` 指向 Ollama）
@@ -69,8 +69,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 
 ```bash
 curl -sS http://localhost:3003/healthz
-docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T litellm \
-  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:4000/healthz').read().decode())"
+curl -sS http://localhost:3003/v1/models -H "Authorization: Bearer $API_KEY"
 ```
 
 步骤 3.5：准备生产 Ollama 模型（仅当 `models.chat` 指向 Ollama）
@@ -110,16 +109,31 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 
 ### 1.3 端口暴露与访问入口
 
-生产暴露面：
+暴露面：
 
-- Compose 默认只向宿主机发布 OneAPI 网关端口 `3003`。
-- `postgres`、`redis`、`litellm`、`ollama` 只在 Docker 内网访问，不再映射宿主机端口。
-- 本次部署暂未包含 TLS 和反向代理；公网开放时请只放通 OneAPI 端口，并在前置网络层限制管理端来源。
+- 网关端口：开发 `3004`，生产 `3003`。
+- 控制台端口：`127.0.0.1:3005`（只监听本机，LiteLLM Admin UI + 管理 API）。需要远程访问时请自行加反向代理和访问控制。
+- `postgres`、`redis`、`ollama` 只在 Docker 内网访问。
+- 本次部署暂未包含 TLS；公网开放时请只放通网关端口，并在前置网络层限制管理端来源。
+
+### 1.3.1 控制台与中文界面
+
+控制台就是 LiteLLM 自带的 Admin UI：
+
+- 地址：`http://localhost:3005/ui`（网关 `/ui`、`/dashboard` 会 302 过来）
+- 用户名：`admin`
+- 密码：`secrets.master_key`
+- 登录后右上角账户菜单或设置里把语言切换为「简体中文」（`zh-CN` 语言包已内置，默认英文，选择会保存在浏览器本地）
+
+镜像版本：
+
+- 默认 `LITELLM_IMAGE=ghcr.io/berriai/litellm:main-latest`，包含中文语言包。
+- 想更保守可以改成 `ghcr.io/berriai/litellm:main-stable`（当前稳定版尚未包含 `zh-CN` 语言包，界面为英文），或固定到已验证的镜像 digest。
 
 管理入口：
-- 开发首页导航：`http://localhost:3004/`
-- 生产首页导航：`http://localhost:3003/`
-- Dashboard：`/dashboard`
+- 开发首页：`http://localhost:3004/`
+- 生产首页：`http://localhost:3003/`
+- 控制台（中文可切换）：`http://localhost:3005/ui`
 - 内置聊天界面：`/chat`
 - Swagger API 文档：`/docs`
 
@@ -157,7 +171,9 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml down
 ### 2.1 生产安全开关
 
 - `app.env: production` 时会拒绝默认管理密码、`dev-key`、`dev-internal` 和默认数据库密码。
-- `secrets.admin_password`、`secrets.api_keys`、`secrets.internal_token`、`secrets.postgres_password` 是生产部署必须替换的敏感值。
+- `secrets.master_key`、`secrets.salt_key`、`secrets.api_keys`、`secrets.internal_token`、`secrets.postgres_password` 是生产部署必须替换的敏感值。
+- `secrets.master_key` 同时是控制台登录密码和网关访问 LiteLLM 的内部主密钥，不要发给 API 客户端。
+- `secrets.salt_key` 用于加密控制台里保存的厂商密钥，一旦使用就不要修改，否则已保存的凭据会失效。
 - `models` 下的键就是客户端请求时使用的模型名。
 - `providers` 配置 OpenAI、DeepSeek、Ollama 等上游凭据和地址。
 

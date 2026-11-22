@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkTpm, enforceRpm, recordTpm } from "../src/rate_limit.js";
+import { enforceRpm } from "../src/rate_limit.js";
 
 class FakeRedis {
   private readonly kv = new Map<string, string>();
@@ -39,19 +39,4 @@ test("enforceRpm: blocks after rpm exceeded", async () => {
   const r3 = await enforceRpm(redis, "p1", 2, now);
   assert.equal(r3.ok, false);
   assert.equal(r3.limit, 2);
-});
-
-test("TPM: record then check", async () => {
-  const redis = new FakeRedis() as any;
-  const now = 1710000000000;
-  await recordTpm(redis, "t1", 10, now);
-  await recordTpm(redis, "t1", 5, now);
-  const ok = await checkTpm(redis, "t1", 20, now);
-  assert.deepEqual(ok, { ok: true });
-  const blocked = await checkTpm(redis, "t1", 12, now);
-  assert.equal(blocked.ok, false);
-  if (!blocked.ok) {
-    assert.equal(blocked.limit, 12);
-    assert.equal(blocked.used, 15);
-  }
 });

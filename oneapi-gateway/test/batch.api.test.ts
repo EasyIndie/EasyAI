@@ -84,35 +84,22 @@ const baseCfg: Config = {
   port: 0,
   logLevel: "info",
   trustProxy: false,
-  adminUser: "admin",
-  adminPass: "admin",
-  authModes: new Set(["apikey"]),
   apiKeys: new Set(["dev-key"]),
-  oauth: {},
-  upstreams: ["http://u"],
+  litellmBaseUrl: "http://u",
+  litellmMasterKey: "sk-test-master",
   upstreamTimeoutMs: 1000,
   rateLimitRpm: 120,
-  cacheEnabled: true,
-  cacheTtlSeconds: 60,
-  cacheReplayChunkDelayMs: 0,
-  cacheReplayMaxTotalMs: 0,
-  cacheReplayMode: "fixed",
-  guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
-  corsOrigin: "*", tls: undefined,
+  corsOrigin: "*",
   internalToken: "dev-internal",
   redisUrl: "redis://x",
   databaseUrl: "postgres://x",
-  modelMap: {},
-  fallbackMap: {},
 };
 
 test("batch: 503 when internal token not configured", async () => {
   const app = Fastify({ logger: false });
   const db = new MemDb() as any;
   const redis = new MemRedis() as any;
-  await registerBatchRoutes(app, { ...baseCfg, internalToken: undefined }, db, redis, async () => {
-    throw new Error("no");
-  });
+  await registerBatchRoutes(app, { ...baseCfg, internalToken: undefined }, db, redis);
   const r = await app.inject({ method: "POST", url: "/v1/batches", payload: { requests: [] } });
   assert.equal(r.statusCode, 503);
 });
@@ -121,7 +108,7 @@ test("batch: creates batch and output jsonl", async () => {
   const app = Fastify({ logger: false });
   const db = new MemDb() as any;
   const redis = new MemRedis() as any;
-  await registerBatchRoutes(app, baseCfg, db, redis, async () => ({ authMode: "apikey", principal: "p1", apiKeyHash: "h", tenantId: null }));
+  await registerBatchRoutes(app, baseCfg, db, redis);
 
   const r = await app.inject({
     method: "POST",

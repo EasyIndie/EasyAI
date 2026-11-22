@@ -4,8 +4,6 @@ import Fastify from "fastify";
 import { registerChatRoutes } from "../src/chat.js";
 import { registerProxyRoutes } from "../src/proxy.js";
 import type { Config } from "../src/config.js";
-import { authenticate } from "../src/auth.js";
-import { UpstreamPool } from "../src/upstreams.js";
 
 class FakeRedis {
   private readonly kv = new Map<string, string>();
@@ -129,27 +127,15 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     port: 0,
     logLevel: "info",
     trustProxy: false,
-    adminUser: "admin",
-    adminPass: "admin",
-    authModes: new Set(["apikey"]),
     apiKeys: new Set(["k1"]),
-    oauth: {},
-    upstreams: ["http://u"],
+    litellmBaseUrl: "http://u",
+    litellmMasterKey: "sk-test-master",
     upstreamTimeoutMs: 2000,
     rateLimitRpm: 1000,
-    cacheEnabled: false,
-    cacheTtlSeconds: 60,
-    cacheReplayChunkDelayMs: 0,
-    cacheReplayMaxTotalMs: 0,
-    cacheReplayMode: "fixed",
-    guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
     corsOrigin: "*",
-    tls: undefined,
     internalToken: undefined,
     redisUrl: "redis://fake",
     databaseUrl: "postgres://fake",
-    modelMap: {},
-    fallbackMap: {},
     ...overrides,
   };
 }
@@ -174,19 +160,12 @@ test("chat api: streams assistant response and persists it", async () => {
 
   const app = Fastify({ logger: false });
   try {
-    const cfg = makeConfig({ upstreams: [upstreamUrl] });
+    const cfg = makeConfig({ litellmBaseUrl: upstreamUrl });
     const redis = new FakeRedis() as any;
     const db = new MemoryChatDb() as any;
-    const pool = new UpstreamPool([upstreamUrl]);
 
-    await registerProxyRoutes(app, {
-      cfg,
-      redis,
-      db,
-      pool,
-      authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
-    });
-    await registerChatRoutes(app, cfg, undefined, db, redis);
+    await registerProxyRoutes(app, { cfg, redis });
+    await registerChatRoutes(app, cfg, db);
 
     await app.listen({ host: "127.0.0.1", port: 0 });
     const appAddr = app.server.address();
@@ -249,19 +228,12 @@ test("chat api: persists stream chunks that use data colon without a space", asy
 
   const app = Fastify({ logger: false });
   try {
-    const cfg = makeConfig({ upstreams: [upstreamUrl] });
+    const cfg = makeConfig({ litellmBaseUrl: upstreamUrl });
     const redis = new FakeRedis() as any;
     const db = new MemoryChatDb() as any;
-    const pool = new UpstreamPool([upstreamUrl]);
 
-    await registerProxyRoutes(app, {
-      cfg,
-      redis,
-      db,
-      pool,
-      authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
-    });
-    await registerChatRoutes(app, cfg, undefined, db, redis);
+    await registerProxyRoutes(app, { cfg, redis });
+    await registerChatRoutes(app, cfg, db);
 
     await app.listen({ host: "127.0.0.1", port: 0 });
     const appAddr = app.server.address();

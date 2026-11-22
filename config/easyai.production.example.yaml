@@ -2,9 +2,14 @@ app:
   env: "production"
   port: 3003
   log_level: "info"
+  # Browser-facing LiteLLM console URL, e.g. http://your-host:3005/ui
+  console_url: "http://localhost:3005/ui"
 
 secrets:
-  admin_password: "REPLACE_WITH_STRONG_ADMIN_PASSWORD"
+  # LiteLLM master key: console login password + internal admin key. Never hand this to API clients.
+  master_key: "REPLACE_WITH_LITELLM_MASTER_KEY"
+  # Keep this stable: it encrypts provider keys stored in the console database.
+  salt_key: "REPLACE_WITH_STABLE_SALT_KEY"
   api_keys:
     - "REPLACE_WITH_CLIENT_API_KEY"
   internal_token: "REPLACE_WITH_INTERNAL_TOKEN"
@@ -32,3 +37,20 @@ models:
   gpt:
     provider: openai
     model: gpt-5.5
+
+# 可选：内容护栏（由 LiteLLM 内置 litellm_content_filter 执行，无需外部依赖）
+# guardrails:
+#   enabled: true
+#   blocked_keywords:
+#     - "ignore all previous instructions"
+#     - "jailbreak"
+#   mask_pii:
+#     - "email"
+#     - "us_ssn"
+
+# 可选：把某个模型配置成失败时自动切换到备选模型
+# models:
+#   chat:
+#     provider: ollama
+#     model: qwen2.5:0.5b
+#     fallback: ["dsv4flash"]

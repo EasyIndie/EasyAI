@@ -1,19 +1,12 @@
-type NavItem = "home" | "chat" | "docs" | "dashboard";
+type NavItem = "home" | "chat" | "docs" | "console";
 
 type GlobalNavOptions = {
   active: NavItem;
-  isAdmin?: boolean;
-  loginState?: string;
+  consoleHref?: string;
 };
 
 function navLink(key: NavItem, active: NavItem, href: string, label: string): string {
   return `<a class="easyai-nav-link${key === active ? " is-active" : ""}" href="${href}">${label}</a>`;
-}
-
-function loginNotice(loginState?: string): string {
-  if (loginState === "failed") return `<div class="easyai-notice error">账号或密码错误。</div>`;
-  if (loginState === "required") return `<div class="easyai-notice">请先登录。</div>`;
-  return "";
 }
 
 export function buildThemeInitScript(): string {
@@ -43,24 +36,7 @@ export function buildThemeInitScript(): string {
 }
 
 export function buildGlobalNav(options: GlobalNavOptions): string {
-  const { active, isAdmin = false, loginState } = options;
-  const loginOpen = loginState === "failed" || loginState === "required" ? " open" : "";
-  const adminControl = isAdmin
-    ? `<a class="easyai-nav-link" href="/dashboard">Dashboard</a><form class="easyai-nav-form" action="/admin/session/logout" method="post"><button class="easyai-nav-link" type="submit">退出</button></form>`
-    : `<details class="easyai-login-menu"${loginOpen}>
-        <summary class="easyai-nav-link">管理员登录</summary>
-        <div class="easyai-login-popover">
-          <h2>管理员登录</h2>
-          <p>登录后进入 Dashboard 管理 API Key、租户和用量。</p>
-          ${loginNotice(loginState)}
-          <form class="easyai-admin-form" id="admin-login-form">
-            <label>账号<input name="username" autocomplete="username" required /></label>
-            <label>密码<input name="password" type="password" autocomplete="current-password" required /></label>
-            <button class="easyai-primary-button" type="submit">登录</button>
-          </form>
-        </div>
-      </details>`;
-
+  const { active, consoleHref = "/ui" } = options;
   return `
 <style>
   :root {
@@ -70,6 +46,15 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     --ui-radius-md: 10px;
     --ui-radius-lg: 14px;
     --ui-control-height: 40px;
+    --ui-control-padding-x: 14px;
+    --ui-control-line-height: 1.35;
+    --ui-font-size-xs: 12px;
+    --ui-font-size-sm: 13px;
+    --ui-font-size-md: 14px;
+    --ui-font-size-lg: 16px;
+    --ui-font-size-xl: 18px;
+    --ui-font-size-2xl: 24px;
+    --ui-font-size-3xl: 32px;
     --ui-bg: #f4f7fb;
     --ui-bg-elevated: rgba(255, 255, 255, 0.86);
     --ui-bg-strong: #ffffff;
@@ -144,7 +129,7 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     gap: 10px;
     text-decoration: none;
     color: var(--ui-text);
-    font-size: 18px;
+    font-size: var(--ui-font-size-xl);
     font-weight: 700;
     white-space: nowrap;
   }
@@ -156,7 +141,7 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     color: #fff;
     display: grid;
     place-items: center;
-    font-size: 14px;
+    font-size: var(--ui-font-size-md);
     font-weight: 800;
     line-height: 1;
   }
@@ -168,16 +153,16 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     justify-content: center;
     border: 1px solid var(--ui-border);
     border-radius: var(--ui-radius-md);
-    padding: 0 12px;
+    padding: 0 var(--ui-control-padding-x);
     background: var(--ui-bg-elevated);
     color: var(--ui-text-muted);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--ui-font-size-sm);
     font-weight: 700;
     text-decoration: none;
     white-space: nowrap;
-    line-height: 1;
+    line-height: var(--ui-control-line-height);
     transition:
       transform 120ms ease,
       border-color 120ms ease,
@@ -230,39 +215,42 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     border-radius: var(--ui-radius-lg);
     background: var(--ui-bg-strong);
     box-shadow: var(--ui-shadow);
-    padding: 16px;
+    padding: 18px;
   }
   .easyai-login-popover h2 {
     margin: 0 0 6px;
-    font-size: 18px;
+    font-size: var(--ui-font-size-xl);
     line-height: 1.3;
   }
   .easyai-login-popover p,
   .easyai-notice {
     color: var(--ui-text-muted);
-    font-size: 13px;
+    font-size: var(--ui-font-size-sm);
     line-height: 1.5;
   }
   .easyai-admin-form {
     display: grid;
-    gap: 10px;
-    margin-top: 12px;
+    gap: 12px;
+    margin-top: 14px;
   }
   .easyai-admin-form label {
     display: grid;
-    gap: 6px;
+    gap: 7px;
     color: var(--ui-text-muted);
-    font-size: 13px;
+    font-size: var(--ui-font-size-xs);
     font-weight: 600;
+    line-height: 1.35;
   }
   .easyai-admin-form input {
     min-height: var(--ui-control-height);
     border: 1px solid var(--ui-border);
     border-radius: var(--ui-radius-md);
-    padding: 0 12px;
+    padding: 0 var(--ui-control-padding-x);
     background: var(--ui-bg-elevated);
     color: var(--ui-text);
     font: inherit;
+    font-size: var(--ui-font-size-md);
+    line-height: var(--ui-control-line-height);
   }
   .easyai-primary-button {
     min-height: var(--ui-control-height);
@@ -272,6 +260,7 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
     color: #fff;
     cursor: pointer;
     font: inherit;
+    line-height: var(--ui-control-line-height);
     font-weight: 700;
   }
   .easyai-notice {
@@ -328,7 +317,7 @@ export function buildGlobalNav(options: GlobalNavOptions): string {
       ${navLink("home", active, "/", "首页")}
       ${navLink("chat", active, "/chat", "会话")}
       ${navLink("docs", active, "/docs", "API 文档")}
-      ${active === "home" ? adminControl : navLink("dashboard", active, "/dashboard", "Dashboard")}
+      ${navLink("console", active, consoleHref, "控制台")}
     </div>
     <button class="easyai-theme-toggle" type="button" data-easyai-theme-toggle>主题</button>
   </div>

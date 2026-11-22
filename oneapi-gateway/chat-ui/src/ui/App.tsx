@@ -27,9 +27,8 @@ type HealthStatus = {
   ok: boolean;
   service: string;
   appEnv?: string;
-  upstreams?: string[];
-  authModes?: string[];
-  cacheEnabled?: boolean;
+  modelPlane?: string;
+  consoleUrl?: string | null;
 };
 
 const LS_KEY = "easyai_chat_api_key";
@@ -818,7 +817,7 @@ export function App() {
             登录
           </Button>
           {loginError && (
-            <div style={{ marginTop: 12, color: "#d93025", fontSize: 13 }}>
+            <div style={{ marginTop: 12, color: "var(--ui-danger)", fontSize: "var(--ui-font-size-sm)", lineHeight: 1.5 }}>
               {loginError}
             </div>
           )}
@@ -836,7 +835,7 @@ export function App() {
       <div className="ui-sidebar" style={{ minHeight: 0 }}>
         <Section className="ui-chat-sidebar-header">
           <Inline style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>EasyAI Chat</h2>
+            <h2 style={{ margin: 0, fontSize: "var(--ui-font-size-xl)", fontWeight: 700 }}>EasyAI Chat</h2>
             <DeploymentBadge appEnv={health?.appEnv} />
           </Inline>
           <Button
@@ -846,7 +845,7 @@ export function App() {
             block
             style={{
               color: isStreaming ? "var(--ui-text-muted)" : "var(--ui-primary)",
-              fontSize: 14,
+              fontSize: "var(--ui-font-size-md)",
             }}
           >
             + 新建对话
@@ -855,9 +854,9 @@ export function App() {
 
         <div className="ui-chat-conversation-list">
           {convLoading && conversations.length === 0 ? (
-            <div className="ui-muted" style={{ padding: 16, fontSize: 13, textAlign: "center" }}>加载中...</div>
+            <div className="ui-muted" style={{ padding: 16, fontSize: "var(--ui-font-size-sm)", textAlign: "center" }}>加载中...</div>
           ) : conversations.length === 0 ? (
-            <div className="ui-muted" style={{ padding: 16, fontSize: 13, textAlign: "center" }}>暂无对话</div>
+            <div className="ui-muted" style={{ padding: 16, fontSize: "var(--ui-font-size-sm)", textAlign: "center" }}>暂无对话</div>
           ) : (
             conversations.map((conv) => (
               <div
@@ -897,7 +896,7 @@ export function App() {
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
                       className="ui-input"
-                      style={{ width: "100%", padding: "2px 6px", fontSize: 14 }}
+                      style={{ width: "100%", padding: "2px 6px", fontSize: "var(--ui-font-size-md)" }}
                     />
                   ) : (
                     <div
@@ -944,7 +943,7 @@ export function App() {
             onClick={handleLogout}
             variant="ghost"
             style={{
-              fontSize: 12,
+              fontSize: "var(--ui-font-size-xs)",
               textDecoration: "underline",
             }}
           >
@@ -962,7 +961,7 @@ export function App() {
             variant={viewMode === "chat" ? "primary" : "ghost"}
             size="sm"
             style={{
-              fontSize: 12,
+              fontSize: "var(--ui-font-size-xs)",
             }}
           >
             对话
@@ -972,7 +971,7 @@ export function App() {
             variant={viewMode === "test" ? "primary" : "ghost"}
             size="sm"
             style={{
-              fontSize: 12,
+              fontSize: "var(--ui-font-size-xs)",
             }}
           >
             模型测试
@@ -982,7 +981,7 @@ export function App() {
             onChange={(e) => setSelectedModel(e.target.value)}
             disabled={isStreaming || modelList.length === 0}
             style={{
-              fontSize: 13,
+              fontSize: "var(--ui-font-size-sm)",
               minWidth: 200,
             }}
           >
@@ -997,7 +996,7 @@ export function App() {
             variant="ghost"
             size="sm"
             style={{
-              fontSize: 12,
+              fontSize: "var(--ui-font-size-xs)",
               color: "var(--ui-text-muted)",
             }}
           >
@@ -1009,7 +1008,7 @@ export function App() {
               onClick={handleStop}
               variant="danger"
               size="sm"
-              style={{ fontSize: 12 }}
+              style={{ fontSize: "var(--ui-font-size-xs)" }}
             >
               停止
             </Button>
@@ -1020,13 +1019,13 @@ export function App() {
               onClick={handleStopTest}
               variant="danger"
               size="sm"
-              style={{ fontSize: 12 }}
+              style={{ fontSize: "var(--ui-font-size-xs)" }}
             >
               停止测试
             </Button>
           )}
 
-          {status && <span className="ui-muted ui-spacer" style={{ fontSize: 12 }}>{status}</span>}
+          {status && <span className="ui-muted ui-spacer" style={{ fontSize: "var(--ui-font-size-xs)" }}>{status}</span>}
           {currentConv && (
             <Button
               onClick={handleCloseConversation}
@@ -1034,7 +1033,7 @@ export function App() {
               variant="ghost"
               size="sm"
               style={{
-                fontSize: 12,
+                fontSize: "var(--ui-font-size-xs)",
                 color: "var(--ui-text-muted)",
               }}
             >
@@ -1048,7 +1047,7 @@ export function App() {
               variant="danger"
               size="sm"
               style={{
-                fontSize: 12,
+                fontSize: "var(--ui-font-size-xs)",
                 color: "#fff",
               }}
               >
@@ -1070,7 +1069,7 @@ export function App() {
                     max={2}
                     value={temperature}
                     onChange={(e) => setTemperature(e.target.value)}
-                    style={{ width: 70, fontSize: 13 }}
+                    style={{ width: 70, fontSize: "var(--ui-font-size-sm)" }}
                   />
                 </Field>
                 <Field label="最大 Tokens" style={{ minWidth: 160 }}>
@@ -1080,7 +1079,7 @@ export function App() {
                     max={32768}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(e.target.value)}
-                    style={{ width: 90, fontSize: 13 }}
+                    style={{ width: 90, fontSize: "var(--ui-font-size-sm)" }}
                   />
                 </Field>
               </ActionBar>
@@ -1139,7 +1138,7 @@ export function App() {
                   rows={2}
                   style={{
                     flex: 1,
-                    fontSize: 14,
+                    fontSize: "var(--ui-font-size-md)",
                     resize: "none",
                     lineHeight: 1.5,
                   }}
@@ -1149,7 +1148,7 @@ export function App() {
                   disabled={!inputText.trim() || isStreaming || !selectedModel}
                   variant="primary"
                   style={{
-                    fontSize: 14,
+                    fontSize: "var(--ui-font-size-md)",
                     fontWeight: 600,
                     whiteSpace: "nowrap",
                   }}
@@ -1173,7 +1172,7 @@ export function App() {
                   rows={4}
                   style={{
                     width: "100%",
-                    fontSize: 14,
+                    fontSize: "var(--ui-font-size-md)",
                     resize: "vertical",
                     lineHeight: 1.5,
                   }}
@@ -1188,7 +1187,7 @@ export function App() {
                   placeholder="请输入要测试的问题或指令"
                   style={{
                     width: "100%",
-                    fontSize: 14,
+                    fontSize: "var(--ui-font-size-md)",
                     resize: "vertical",
                     lineHeight: 1.5,
                   }}
@@ -1196,7 +1195,7 @@ export function App() {
               </Field>
             </Stack>
 
-            <ActionBar style={{ marginTop: 14, color: "var(--ui-text-muted)", fontSize: 13 }}>
+            <ActionBar style={{ marginTop: 14, color: "var(--ui-text-muted)", fontSize: "var(--ui-font-size-sm)" }}>
               <Inline gap={8} wrap={false}>
                 <Input
                   type="checkbox"
@@ -1220,7 +1219,7 @@ export function App() {
                 disabled={testLoading || !selectedModel.trim()}
                 variant="primary"
                 style={{
-                  fontSize: 14,
+                  fontSize: "var(--ui-font-size-md)",
                   fontWeight: 600,
                 }}
               >
@@ -1231,7 +1230,7 @@ export function App() {
                 disabled={!testLoading}
                 variant="secondary"
                 style={{
-                  fontSize: 14,
+                  fontSize: "var(--ui-font-size-md)",
                 }}
               >
                 停止输出
@@ -1247,7 +1246,7 @@ export function App() {
                 disabled={testLoading}
                 variant="secondary"
                 style={{
-                  fontSize: 14,
+                  fontSize: "var(--ui-font-size-md)",
                 }}
               >
                 清空结果
@@ -1263,7 +1262,7 @@ export function App() {
                   placeholder="请求返回内容会显示在这里"
                   style={{
                     width: "100%",
-                    fontSize: 14,
+                    fontSize: "var(--ui-font-size-md)",
                     resize: "vertical",
                     lineHeight: 1.5,
                   }}
@@ -1278,7 +1277,7 @@ export function App() {
                   placeholder="原始响应 JSON 会显示在这里"
                   style={{
                     width: "100%",
-                    fontSize: 13,
+                    fontSize: "var(--ui-font-size-sm)",
                     resize: "vertical",
                     lineHeight: 1.5,
                   }}
@@ -1295,8 +1294,8 @@ export function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <Stack gap={10} style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>确认删除会话？</div>
-              <div style={{ fontSize: 14, color: "var(--ui-text-muted)", lineHeight: 1.6 }}>
+              <div style={{ fontSize: "var(--ui-font-size-xl)", fontWeight: 700 }}>确认删除会话？</div>
+              <div style={{ fontSize: "var(--ui-font-size-md)", color: "var(--ui-text-muted)", lineHeight: 1.6 }}>
                 该操作不可撤销。将删除会话及其全部消息：<br />
                 <span style={{ color: "var(--ui-text)", fontWeight: 600 }}>{pendingDelete.title}</span>
               </div>
@@ -1306,7 +1305,7 @@ export function App() {
                 onClick={() => setPendingDelete(null)}
                 variant="secondary"
                 style={{
-                  fontSize: 14,
+                  fontSize: "var(--ui-font-size-md)",
                 }}
               >
                 取消
@@ -1315,7 +1314,7 @@ export function App() {
                 onClick={confirmDeleteConversation}
                 variant="danger"
                 style={{
-                  fontSize: 14,
+                  fontSize: "var(--ui-font-size-md)",
                 }}
               >
                 确认删除

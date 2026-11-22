@@ -4,13 +4,7 @@ import { Readable } from "node:stream";
 import type { Config } from "./config.js";
 import type { Db, ConversationRow } from "./db.js";
 import { createConversation, listConversations, getConversation, updateConversationTitle, touchConversation, deleteConversation, insertMessage, listMessages } from "./db.js";
-import type { RedisClient } from "./redis.js";
-import type { AuthContext, OAuthVerifier } from "./auth.js";
-import { authenticate, hasScope } from "./auth.js";
-
-async function authenticateRequest(cfg: Config, oauth: OAuthVerifier | undefined, headers: Record<string, any>, db: Db, redis: RedisClient, reqIp?: string): Promise<AuthContext> {
-  return authenticate(cfg, oauth, headers, db, redis, reqIp);
-}
+import { authenticate, type AuthContext } from "./auth.js";
 
 function authHeaderFromRequest(req: any): string {
   const h = req.headers["authorization"] ?? req.headers["x-api-key"];
@@ -53,18 +47,12 @@ function extractAssistantContent(sseText: string): { content: string; promptToke
   return { content, promptTokens, completionTokens };
 }
 
-export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oauth: OAuthVerifier | undefined, db: Db, redis: RedisClient): Promise<void> {
+export async function registerChatRoutes(app: FastifyInstance, cfg: Config, db: Db): Promise<void> {
   app.addHook("onRequest", async (req, reply) => {
     const p = (req.url.split("?")[0] ?? req.url) as string;
     if (!p.startsWith("/chat-api/")) return;
     try {
-      const auth = await authenticateRequest(cfg, oauth, req.headers as any, db, redis, (req as any).ip);
-      const method = req.method.toUpperCase();
-      const required = p === "/chat-api/models" ? "model:invoke" : method === "GET" ? "chat:read" : "chat:write";
-      if (!hasScope(auth, required)) {
-        return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
-      }
-      (req as any).authContext = auth;
+      (req as any).authContext = authenticate(cfg, req.headers as any);
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
@@ -100,7 +88,7 @@ export async function registerChatRoutes(app: FastifyInstance, cfg: Config, oaut
   app.post("/chat-api/conversations", async (req, reply) => {
     const auth = (req as any).authContext as AuthContext;
     const id = randomUUID();
-    await createConversation(db, id, auth.principal, auth.tenantId ?? null);
+    await createConversation(db, id, auth.principal);
     return { id };
   });
 

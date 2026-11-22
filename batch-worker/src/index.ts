@@ -1,7 +1,7 @@
 import pg from "pg";
 import { createClient } from "redis";
 import fs from "node:fs";
-import yaml from "js-yaml";
+import { load as loadYaml } from "js-yaml";
 import process from "node:process";
 
 type BatchRow = {
@@ -22,7 +22,7 @@ function loadConfig() {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
   const fileContents = fs.readFileSync(configPath, "utf8");
-  const parsed = yaml.load(fileContents) as any;
+  const parsed = loadYaml(fileContents) as any;
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Invalid YAML configuration");
   }

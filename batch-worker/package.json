@@ -9,15 +9,14 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "js-yaml": "^4.1.1",
-    "pg": "^8.21.0",
-    "redis": "^5.12.1"
+    "js-yaml": "^5.5.0",
+    "pg": "^8.23.1",
+    "redis": "^6.3.1"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.9.1",
-    "@types/pg": "^8.20.0",
-    "tsx": "^4.22.3",
-    "typescript": "^6.0.3"
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }

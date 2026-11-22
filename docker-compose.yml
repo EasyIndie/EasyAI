@@ -23,15 +23,26 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
+  # Model access plane: official LiteLLM Proxy (provider adapters, routing,
+  # retries, caching, guardrails, virtual keys, budgets, spend logs and the
+  # Chinese-capable Admin UI at /ui).
   litellm:
-    build:
-      context: ./litellm-service
+    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-latest}
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/app/scripts/docker/litellm-entrypoint.sh"]
+    ports:
+      # Admin console only. Kept on localhost by default; put it behind your
+      # own proxy if you need remote access.
+      - "127.0.0.1:3005:4000"
     volumes:
       - ./config/easyai.development.yaml:/app/config/easyai.yaml:ro
+      - ./scripts:/app/scripts:ro
     depends_on:
       - ollama
+      - postgres
+      - redis
 
+  # EasyAI gateway: single entrypoint, chat UI, batch API.
   oneapi:
     build:
       context: ./oneapi-gateway

@@ -1,55 +1,28 @@
 import fs from "node:fs";
-import yaml from "js-yaml";
-import { parseCidrAllowList } from "./net.js";
-
-export type AuthMode = "apikey" | "oauth";
+import { load as loadYaml } from "js-yaml";
 
 export type Config = {
   appEnv: "development" | "staging" | "production" | "test";
   port: number;
   bodyLimitBytes?: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
-  trustProxy: boolean | number;
-  adminUser: string;
-  adminPass: string;
-  adminAllowedCidrs?: string[] | null;
-  metricsAllowedCidrs?: string[] | null;
+  trustProxy: boolean | string;
   securityHeadersEnabled?: boolean;
-  authModes: Set<AuthMode>;
+  /** Keys defined in YAML. LiteLLM virtual keys are also accepted and validated by LiteLLM. */
   apiKeys: Set<string>;
-  oauth: {
-    jwksUrl?: string;
-    audience?: string;
-    issuer?: string;
-  };
-  upstreams: string[];
+  /** LiteLLM proxy base URL (model access plane). */
+  litellmBaseUrl: string;
+  /** Master key used by the gateway when it talks to LiteLLM on behalf of YAML keys. */
+  litellmMasterKey: string;
+  /** Public URL of the LiteLLM console (`/ui`). */
+  consoleUrl?: string;
   upstreamTimeoutMs: number;
   rateLimitRpm: number;
-  cacheEnabled: boolean;
-  cacheTtlSeconds: number;
-  cacheReplayChunkDelayMs: number;
-  cacheReplayMaxTotalMs: number;
-  cacheReplayMode: "fixed" | "original";
-  guardrails: {
-    enabled: boolean;
-    blockInternalIp: boolean;
-    injectionKeywords: string[];
-    piiMaskEnabled: boolean;
-  };
   corsOrigin: string | string[];
-  tls?: {
-    certPath: string;
-    keyPath: string;
-  };
   internalToken?: string;
-  internalTokenAllowCidrs?: string[] | null;
   redisUrl: string;
   databaseUrl: string;
-  modelMap: Record<string, string>;
-  fallbackMap: Record<string, string[]>;
 };
-
-const PRIVATE_CIDRS = ["127.0.0.1/32", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"];
 
 function parseBytes(value: unknown, defaultBytes: number): number {
   if (value === undefined || value === null || value === "") return defaultBytes;
@@ -63,15 +36,11 @@ function parseBytes(value: unknown, defaultBytes: number): number {
   return Math.floor(n * multiplier);
 }
 
-function arr(value: unknown, fallback: string[] = []): string[] {
-  return Array.isArray(value) ? value.map((v) => String(v).trim()).filter(Boolean) : fallback;
-}
-
-function buildPostgresUrl(password: string): string {
-  const host = "postgres";
-  const port = 5432;
-  const user = "oneapi";
-  const name = "oneapi";
+function buildPostgresUrl(password: string, app: any): string {
+  const host = String(app.postgres_host ?? "postgres");
+  const port = Number(app.postgres_port ?? 5432);
+  const user = String(app.postgres_user ?? "oneapi");
+  const name = String(app.postgres_db ?? "oneapi");
   return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(name)}`;
 }
 
@@ -84,18 +53,15 @@ function isPlaceholderSecret(value: unknown): boolean {
   );
 }
 
-function assertNoPlaceholderSecrets(opts: {
-  adminPass: string;
-  apiKeys: Set<string>;
-  internalToken?: string;
-  databaseUrl: string;
-}): void {
-  if (isPlaceholderSecret(opts.adminPass)) throw new Error(`Refusing to start with placeholder admin password in production`);
+function assertNoPlaceholderSecrets(opts: { apiKeys: Set<string>; internalToken?: string; masterKey: string; databaseUrl: string }): void {
   for (const key of opts.apiKeys) {
     if (isPlaceholderSecret(key)) throw new Error(`Refusing to start with placeholder api key in production`);
   }
   if (opts.internalToken && isPlaceholderSecret(opts.internalToken)) {
     throw new Error(`Refusing to start with placeholder internal token in production`);
+  }
+  if (isPlaceholderSecret(opts.masterKey)) {
+    throw new Error(`Refusing to start with placeholder master key in production`);
   }
   if (opts.databaseUrl.includes("oneapi:oneapi@")) {
     throw new Error(`Refusing to start with default database password in production`);
@@ -115,9 +81,7 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
 
-  const fileContents = fs.readFileSync(configPath, "utf8");
-  const parsed = yaml.load(fileContents) as any;
-
+  const parsed = loadYaml(fs.readFileSync(configPath, "utf8")) as any;
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Invalid YAML configuration");
   }
@@ -129,53 +93,29 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
   const port = Number(app.port ?? 3003);
   const bodyLimitBytes = parseBytes(app.body_limit, 10 * 1024 * 1024);
   const logLevel = app.log_level ?? "info";
-  const trustProxy = app.trust_proxy ?? false;
-
-  const adminUser = "admin";
-  const adminPass = String(secrets.admin_password ?? "").trim();
-  const adminAllowedCidrs = parseCidrAllowList(undefined, appEnv === "production" ? PRIVATE_CIDRS : undefined);
-  const metricsAllowedCidrs = parseCidrAllowList(undefined, appEnv === "production" ? PRIVATE_CIDRS : undefined);
+  const trustProxy = typeof app.trust_proxy === "number" ? String(app.trust_proxy) : (app.trust_proxy ?? false);
   const securityHeadersEnabled = appEnv !== "development";
 
-  const authModes = new Set<AuthMode>(["apikey"]);
-
   const apiKeysArr = Array.isArray(secrets.api_keys) ? secrets.api_keys : [];
-  const apiKeys = new Set<string>(apiKeysArr.map((s: string) => s.trim()).filter(Boolean));
+  const apiKeys = new Set<string>(apiKeysArr.map((s: string) => String(s).trim()).filter(Boolean));
 
-  const oauth = {};
+  const litellmBaseUrl = String(app.litellm_base_url ?? "http://litellm:4000").replace(/\/+$/, "");
+  const litellmMasterKey = String(secrets.master_key ?? "").trim();
+  if (!litellmMasterKey) {
+    throw new Error("Missing secrets.master_key in configuration");
+  }
 
-  const upstreams = ["http://litellm:4000"];
-  const upstreamTimeoutMs = 60000;
-  
-  const rateLimitRpm = 120;
-  
-  const cacheEnabled = true;
-  const cacheTtlSeconds = 60;
-  const cacheReplayChunkDelayMs = 35;
-  const cacheReplayMaxTotalMs = 10000;
-  const cacheReplayMode = "original";
-
-  const guardEnabled = true;
-  const guardBlockInternalIp = true;
-  const guardPiiMaskEnabled = false;
-  const injectionKeywords = ["ignore all previous instructions", "system prompt", "developer message", "jailbreak"];
-
+  const consoleUrl = app.console_url ? String(app.console_url) : undefined;
+  const upstreamTimeoutMs = Number(app.upstream_timeout_ms ?? 60000);
+  const rateLimitRpm = Number(app.rate_limit_rpm ?? 120);
   const corsOrigin = "*";
 
-  const tls = undefined;
-
-  const internalToken = secrets.internal_token;
-  let internalTokenAllowCidrs: string[] | null | undefined = undefined;
-  if (internalToken) internalTokenAllowCidrs = parseCidrAllowList(undefined, PRIVATE_CIDRS);
-
+  const internalToken = secrets.internal_token ? String(secrets.internal_token) : undefined;
   const redisUrl = "redis://redis:6379";
-  const databaseUrl = buildPostgresUrl(String(secrets.postgres_password ?? "oneapi"));
-
-  const modelMap = {};
-  const fallbackMap = {};
+  const databaseUrl = buildPostgresUrl(String(secrets.postgres_password ?? "oneapi"), app);
 
   if (appEnv === "production") {
-    assertNoPlaceholderSecrets({ adminPass, apiKeys, internalToken, databaseUrl });
+    assertNoPlaceholderSecrets({ apiKeys, internalToken, masterKey: litellmMasterKey, databaseUrl });
   }
 
   return {
@@ -184,39 +124,16 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
     bodyLimitBytes,
     logLevel,
     trustProxy,
-    adminUser,
-    adminPass,
-    adminAllowedCidrs,
-    metricsAllowedCidrs,
     securityHeadersEnabled,
-    authModes,
     apiKeys,
-    oauth: {
-      jwksUrl: undefined,
-      audience: undefined,
-      issuer: undefined,
-    },
-    upstreams,
+    litellmBaseUrl,
+    litellmMasterKey,
+    consoleUrl,
     upstreamTimeoutMs,
     rateLimitRpm,
-    cacheEnabled,
-    cacheTtlSeconds,
-    cacheReplayChunkDelayMs,
-    cacheReplayMaxTotalMs,
-    cacheReplayMode,
-    guardrails: {
-      enabled: guardEnabled,
-      blockInternalIp: guardBlockInternalIp,
-      injectionKeywords,
-      piiMaskEnabled: guardPiiMaskEnabled,
-    },
     corsOrigin,
-    tls,
     internalToken,
-    internalTokenAllowCidrs,
     redisUrl,
     databaseUrl,
-    modelMap,
-    fallbackMap,
   };
 }

@@ -26,11 +26,14 @@ npm test
 前端构建：
 
 ```bash
-cd oneapi-gateway/admin-ui
+cd oneapi-gateway/chat-ui
 npm ci && npm run build
+```
 
-cd ../chat-ui
-npm ci && npm run build
+LiteLLM 配置生成（改完 `config/*.yaml` 后可本地校验）：
+
+```bash
+python3 scripts/render-litellm-config.py config/easyai.development.yaml
 ```
 
 ## 3. 文档一致性校验

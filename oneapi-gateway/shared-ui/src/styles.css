@@ -7,6 +7,18 @@
   --ui-control-height: 40px;
   --ui-control-height-compact: 36px;
   --ui-control-gap: 10px;
+  --ui-control-padding-x: 14px;
+  --ui-control-font-size: var(--ui-font-size-md);
+  --ui-control-line-height: 1.35;
+  --ui-card-padding: 16px;
+  --ui-text-line-height: 1.62;
+  --ui-font-size-xs: 12px;
+  --ui-font-size-sm: 13px;
+  --ui-font-size-md: 14px;
+  --ui-font-size-lg: 16px;
+  --ui-font-size-xl: 18px;
+  --ui-font-size-2xl: 24px;
+  --ui-font-size-3xl: 32px;
   --ui-space-1: 4px;
   --ui-space-2: 8px;
   --ui-space-3: 12px;
@@ -62,9 +74,41 @@ body {
     radial-gradient(circle at right top, rgba(14, 165, 233, 0.1), transparent 24%),
     var(--ui-bg);
   font-family: var(--ui-font-sans);
+  font-size: var(--ui-font-size-md);
+  line-height: var(--ui-text-line-height);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1,
+.ui-page-title {
+  margin-bottom: 0;
+  font-size: clamp(var(--ui-font-size-2xl), 2.4vw, var(--ui-font-size-3xl));
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+h2,
+.ui-page-subtitle {
+  margin-bottom: 0;
+  font-size: var(--ui-font-size-2xl);
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+h3 {
+  font-size: var(--ui-font-size-xl);
+  line-height: 1.28;
 }
 
 * {
@@ -85,7 +129,7 @@ input[type="submit"],
 input[type="reset"],
 select {
   min-height: var(--ui-control-height) !important;
-  padding: 0 14px !important;
+  padding: 0 var(--ui-control-padding-x) !important;
   border-radius: var(--ui-radius-md) !important;
   border: 1px solid var(--ui-border) !important;
   background: var(--ui-bg-elevated);
@@ -97,7 +141,7 @@ button {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  line-height: 1;
+  line-height: var(--ui-control-line-height);
   transition:
     transform 120ms ease,
     border-color 120ms ease,
@@ -108,13 +152,15 @@ button {
 .ui-button {
   gap: 8px;
   white-space: nowrap;
+  min-width: max-content;
+  letter-spacing: 0.01em;
 }
 
 .ui-button[data-size="sm"] {
   min-height: 34px !important;
   padding: 0 12px !important;
   border-radius: 12px !important;
-  font-size: 12px;
+  font-size: var(--ui-font-size-xs);
 }
 
 .ui-button[data-variant="primary"] {
@@ -167,6 +213,12 @@ textarea {
   border: 1px solid var(--ui-border) !important;
   background: var(--ui-input-bg) !important;
   outline: none;
+  font-size: var(--ui-control-font-size);
+  line-height: var(--ui-control-line-height);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
 .ui-input,
@@ -175,7 +227,12 @@ textarea {
   box-shadow: none;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  padding-inline: var(--ui-control-padding-x) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
 select {
   height: var(--ui-control-height) !important;
 }
@@ -192,10 +249,10 @@ select {
 }
 
 textarea {
-  padding: 12px 14px !important;
+  padding: 13px 15px !important;
   resize: vertical;
   min-height: 120px;
-  line-height: 1.55;
+  line-height: var(--ui-text-line-height);
 }
 
 input:focus,
@@ -263,33 +320,37 @@ a {
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   box-shadow: var(--ui-shadow-soft);
+  padding: var(--ui-card-padding);
 }
 
 .ui-section {
   display: grid;
   gap: var(--ui-space-4);
+  min-width: 0;
 }
 
 .ui-section-header {
   display: grid;
-  gap: 4px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .ui-section-title {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: var(--ui-font-size-xl);
+  line-height: 1.32;
+  letter-spacing: -0.01em;
 }
 
 .ui-section-description {
   color: var(--ui-text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--ui-font-size-sm);
+  line-height: var(--ui-text-line-height);
 }
 
 .ui-field {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -305,14 +366,16 @@ a {
 
 .ui-field-label {
   color: var(--ui-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--ui-font-size-xs);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
 }
 
 .ui-field-hint {
   color: var(--ui-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--ui-font-size-xs);
+  line-height: 1.5;
 }
 
 .ui-action-bar {
@@ -352,11 +415,16 @@ a {
   height: var(--ui-control-height) !important;
 }
 
+.ui-action-bar > .ui-button,
+.ui-action-bar > button {
+  align-self: flex-end;
+}
+
 .ui-action-bar .ui-button[data-size="sm"] {
   min-height: var(--ui-control-height) !important;
   height: var(--ui-control-height) !important;
   padding: 0 14px !important;
-  font-size: 13px;
+  font-size: var(--ui-font-size-sm);
 }
 
 .ui-popover {
@@ -387,11 +455,13 @@ a {
 .ui-stack {
   display: grid;
   gap: var(--ui-space-4);
+  min-width: 0;
 }
 
 .ui-grid {
   display: grid;
   gap: var(--ui-space-3);
+  min-width: 0;
 }
 
 .ui-inline {
@@ -423,6 +493,7 @@ a {
   color: var(--ui-text);
   box-shadow: var(--ui-shadow-soft);
   white-space: nowrap;
+  line-height: 1;
 }
 
 .ui-badge-dot {
@@ -470,10 +541,11 @@ a {
 
 .ui-table th,
 .ui-table td {
-  padding: 12px 12px;
+  padding: 13px 14px;
   text-align: left;
   border-bottom: 1px solid var(--ui-border);
   vertical-align: top;
+  line-height: 1.52;
 }
 
 .ui-table thead th {
@@ -481,11 +553,16 @@ a {
   top: 0;
   background: var(--ui-bg-elevated);
   z-index: 1;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .ui-table--compact th,
 .ui-table--compact td {
-  padding: 10px 10px;
+  padding: 10px 12px;
 }
 
 .ui-dialog-overlay {
@@ -500,7 +577,7 @@ a {
 
 .ui-dialog {
   width: min(520px, 100%);
-  padding: 22px;
+  padding: 24px;
   border-radius: 22px;
   background: var(--ui-bg-strong);
   border: 1px solid var(--ui-border);
@@ -515,7 +592,10 @@ a {
 }
 
 .ui-layout-chat {
+  --ui-chat-bottom-height: 89px;
   display: flex;
+  height: 100%;
+  max-height: 100%;
   min-height: 100%;
   min-width: 0;
   overflow: hidden;
@@ -555,12 +635,19 @@ a {
 }
 
 .ui-chat-conversation-item {
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-radius: var(--ui-radius-sm);
   margin-bottom: 4px;
   display: flex;
   gap: 8px;
   align-items: flex-start;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.ui-chat-conversation-item:hover {
+  background: color-mix(in srgb, var(--ui-primary) 8%, transparent);
 }
 
 .ui-chat-conversation-active {
@@ -568,26 +655,45 @@ a {
 }
 
 .ui-chat-conversation-name {
-  font-size: 14px;
+  font-size: var(--ui-font-size-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ui-chat-conversation-meta {
-  font-size: 12px;
+  font-size: var(--ui-font-size-xs);
   color: var(--ui-text-muted);
   margin-top: 2px;
 }
 
 .ui-chat-footer {
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  flex: 0 0 var(--ui-chat-bottom-height);
+  height: var(--ui-chat-bottom-height);
+  min-height: var(--ui-chat-bottom-height);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--ui-border);
-  font-size: 12px;
+  font-size: var(--ui-font-size-xs);
   color: var(--ui-text-muted);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ui-bg-strong) 72%, transparent), transparent 140%),
+    var(--ui-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+}
+
+html[data-theme="dark"] .ui-chat-footer {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.ui-chat-footer > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ui-chat-main {
@@ -613,7 +719,7 @@ a {
 .ui-chat-settings {
   padding: 12px 24px;
   border-bottom: 1px solid var(--ui-border);
-  font-size: 13px;
+  font-size: var(--ui-font-size-sm);
   background: var(--ui-bg);
   align-items: flex-end;
 }
@@ -642,12 +748,13 @@ a {
 
 .ui-chat-message-bubble {
   max-width: 75%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.6;
+  padding: 14px 17px;
+  border-radius: 16px;
+  font-size: var(--ui-font-size-md);
+  line-height: var(--ui-text-line-height);
   white-space: pre-wrap;
   overflow-wrap: break-word;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .ui-chat-message-bubble--user {
@@ -658,6 +765,7 @@ a {
 .ui-chat-message-bubble--assistant {
   background: color-mix(in srgb, var(--ui-bg-strong) 72%, var(--ui-bg-elevated));
   color: var(--ui-text);
+  border: 1px solid var(--ui-border);
 }
 
 .ui-chat-message-caret {
@@ -671,9 +779,19 @@ a {
 }
 
 .ui-chat-input-panel {
+  flex: 0 0 var(--ui-chat-bottom-height);
+  height: var(--ui-chat-bottom-height);
+  min-height: var(--ui-chat-bottom-height);
   padding: 16px 24px calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--ui-border);
-  background: var(--ui-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ui-bg-strong) 72%, transparent), transparent 140%),
+    var(--ui-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent);
+}
+
+html[data-theme="dark"] .ui-chat-input-panel {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .ui-chat-input-panel .ui-inline {
@@ -683,6 +801,8 @@ a {
 .ui-chat-input-panel .ui-textarea {
   min-height: 56px;
   max-height: 180px;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
 }
 
 .ui-chat-input-panel .ui-button {
@@ -693,7 +813,12 @@ a {
 
 .ui-chat-test-panel {
   flex: 1;
+  min-height: 0;
+  max-height: 100%;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  align-content: start;
   padding: 24px;
 }
 
@@ -705,13 +830,13 @@ a {
 .ui-chat-empty {
   height: 100%;
   color: #cbd5e1;
-  font-size: 16px;
+  font-size: var(--ui-font-size-lg);
   display: grid;
   place-items: center;
 }
 
 .ui-chat-empty-icon {
-  font-size: 48px;
+  font-size: clamp(40px, 6vw, 48px);
   margin-bottom: 16px;
   opacity: 0.3;
 }
@@ -781,7 +906,10 @@ a {
   .ui-chat-settings,
   .ui-chat-messages,
   .ui-chat-test-panel,
+  .ui-chat-footer,
   .ui-chat-input-panel {
+    flex-basis: auto;
+    height: auto;
     padding-left: 14px;
     padding-right: 14px;
   }

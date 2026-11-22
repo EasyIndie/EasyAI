@@ -1,19 +1,12 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import fs from "node:fs";
 import { loadConfig } from "./config.js";
 import { createRedis } from "./redis.js";
 import { createDb } from "./db.js";
-import { registry } from "./metrics.js";
-import { createOAuthVerifier, authenticate } from "./auth.js";
-import { UpstreamPool } from "./upstreams.js";
 import { registerProxyRoutes } from "./proxy.js";
-import { registerDashboard } from "./dashboard.js";
-import { registerAdminApi } from "./admin.js";
+import { registerUi } from "./ui.js";
 import { registerBatchRoutes } from "./batch.js";
-import { registerOpenApi } from "./openapi.js";
 import { registerChatRoutes } from "./chat.js";
-import { ipAllowed } from "./net.js";
 
 const cfg = loadConfig();
 
@@ -24,18 +17,10 @@ const app = Fastify({
   },
   bodyLimit: cfg.bodyLimitBytes ?? 10 * 1024 * 1024,
   trustProxy: cfg.trustProxy,
-  ...(cfg.tls ? {
-    https: {
-      cert: fs.readFileSync(cfg.tls.certPath),
-      key: fs.readFileSync(cfg.tls.keyPath),
-    },
-  } : {}),
 });
 
 const redis = await createRedis(cfg.redisUrl);
 const db = await createDb(cfg.databaseUrl);
-const oauth = createOAuthVerifier(cfg);
-const pool = new UpstreamPool(cfg.upstreams);
 
 await app.register(cors, { origin: cfg.corsOrigin });
 
@@ -52,37 +37,41 @@ if (cfg.securityHeadersEnabled === true) {
 app.get("/healthz", async () => {
   return {
     ok: true,
-    service: "oneapi-gateway",
+    service: "easyai-gateway",
     appEnv: cfg.appEnv,
-    upstreams: pool.list().map((u) => u.baseUrl),
-    authModes: Array.from(cfg.authModes.values()),
-    cacheEnabled: cfg.cacheEnabled,
+    modelPlane: cfg.litellmBaseUrl,
+    consoleUrl: cfg.consoleUrl ?? null,
   };
 });
 
-app.get("/metrics", async (_req, reply) => {
-  if (!ipAllowed((_req as any).ip, cfg.metricsAllowedCidrs)) {
-    return reply.status(403).send({ error: { message: "forbidden", type: "auth_error" } });
+/**
+ * Docs and metrics are produced by LiteLLM; the gateway only forwards them so
+ * there is a single source of truth for the API surface and observability.
+ */
+async function fetchModelPlane(path: string, reply: any) {
+  try {
+    const res = await fetch(`${cfg.litellmBaseUrl}${path}`, {
+      headers: { authorization: `Bearer ${cfg.litellmMasterKey}` },
+    });
+    const contentType = res.headers.get("content-type") ?? "application/json";
+    reply.status(res.status).header("content-type", contentType);
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  } catch {
+    return reply.status(503).send({ error: { message: "model service unavailable", type: "upstream_error" } });
   }
-  reply.header("content-type", registry.contentType);
-  return registry.metrics();
-});
+}
 
-await registerOpenApi(app, cfg);
-await registerDashboard(app, cfg, db);
-await registerAdminApi(app, cfg, db, redis);
+app.get("/openapi.json", async (_req, reply) => fetchModelPlane("/openapi.json", reply));
+app.get("/docs", async (_req, reply) => fetchModelPlane("/docs", reply));
+app.get("/docs/*", async (req, reply) => fetchModelPlane(req.url, reply));
+app.get("/metrics", async (_req, reply) => fetchModelPlane("/metrics", reply));
 
-await registerProxyRoutes(app, {
-  cfg,
-  redis,
-  db,
-  pool,
-  authenticateRequest: async (headers, reqIp) => authenticate(cfg, oauth, headers, db, redis, reqIp),
-});
+await registerUi(app, cfg);
 
-await registerBatchRoutes(app, cfg, db, redis, async (headers) => authenticate(cfg, oauth, headers, db, redis));
+await registerProxyRoutes(app, { cfg, redis });
 
-await registerChatRoutes(app, cfg, oauth, db, redis);
+await registerBatchRoutes(app, cfg, db, redis);
+await registerChatRoutes(app, cfg, db);
 
 await app.listen({ host: "0.0.0.0", port: cfg.port });
 

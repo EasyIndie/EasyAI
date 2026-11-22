@@ -46,9 +46,8 @@ docker compose logs --tail=200 oneapi litellm batch_worker
 
 ### 2.2 常见错误
 
-- `401 unauthorized`：凭据错误或缺失
+- `401 unauthorized`：凭据错误或缺失（虚拟密钥请在控制台确认状态）
 - `429 rate limited`：触发限流
-- `400 model not allowed`：请求模型不在 `models` 配置中
 - `404 model not found`：上游声明了模型别名，但实际模型未就绪（例如 Ollama 未拉取）
 - `503`（Batch）：`internal_token` 未配置或 worker 不可用
 - `502/504`：上游模型服务不可达或超时

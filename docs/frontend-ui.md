@@ -1,6 +1,8 @@
 # 前端 UI 约定
 
-这份约定适用于 `oneapi-gateway/chat-ui` 和 `oneapi-gateway/admin-ui`。新增页面时，优先复用 `oneapi-gateway/shared-ui` 中的组件和样式，不再在页面内单独定义一套视觉规则。
+这份约定适用于 `oneapi-gateway/chat-ui`（自研前端）与 `oneapi-gateway/src/ui.ts` 里的服务端渲染页面。新增页面时，优先复用 `oneapi-gateway/shared-ui` 中的组件和样式（或 `ui-shell.ts` 的导航/主题脚本），不再在页面内单独定义一套视觉规则。
+
+> 管理后台不再自研：密钥、预算、用量、日志统一使用 LiteLLM Admin UI（`/ui`，支持中文）。
 
 ## 1. 统一原则
 
@@ -77,6 +79,6 @@
 ## 6. 默认选择
 
 - 聊天页优先使用：`Section`、`Field`、`ActionBar`、`Stack`
-- 管理页优先使用：`Section`、`Card`、`Table`、`Grid`、`Field`
+- 服务端渲染页（首页）使用 `ui-shell.ts` 的 `buildGlobalNav` + 主题脚本，保持导航和暗色模式一致
 
 如果必须例外，先把例外写进 `shared-ui`，再在页面里使用，不要在业务页分叉出独立规范。

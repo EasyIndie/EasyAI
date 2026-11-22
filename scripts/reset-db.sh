@@ -18,14 +18,14 @@ usage() {
   不会删除 Ollama 模型卷，不会删除源码或配置文件。
 
 选项:
-  --usage-only   仅清空 usage_events 表
+  --usage-only   仅清空 conversations / messages 会话表
   --all          清空 OneAPI 业务表（默认）
   --with-redis   同时清空 Redis 缓存和限流计数
   --yes, -y      跳过确认提示
   --help, -h     显示帮助
 
 默认清空的表:
-  batch_items, batches, usage_events, api_keys, tenants
+  batch_items, batches, conversations, messages
 
 示例:
   ./scripts/reset-db.sh
@@ -81,11 +81,11 @@ if ! docker compose "${compose_args[@]}" ps postgres >/dev/null 2>&1; then
 fi
 
 if [[ "$mode" == "usage" ]]; then
-  sql="TRUNCATE TABLE usage_events RESTART IDENTITY;"
-  summary="仅清空 usage_events 用量统计表"
+  sql="TRUNCATE TABLE messages, conversations RESTART IDENTITY CASCADE;"
+  summary="仅清空会话与消息"
 else
-  sql="TRUNCATE TABLE batch_items, batches, usage_events, api_keys, tenants RESTART IDENTITY CASCADE;"
-  summary="清空 batches、batch_items、usage_events、api_keys、tenants"
+  sql="TRUNCATE TABLE batch_items, batches, messages, conversations RESTART IDENTITY CASCADE;"
+  summary="清空 batches、batch_items、messages、conversations"
 fi
 
 if [[ "$with_redis" == "true" ]]; then

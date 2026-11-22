@@ -67,7 +67,7 @@ function extractEnvVarsFromText(s: string): string[] {
 }
 
 function extractPathsFromText(s: string): string[] {
-  const re = /\/(healthz|metrics|dashboard|admin\/api\/[a-z0-9/_:-]+|v1\/[a-z0-9/_:-]+)\b/gi;
+  const re = /\/(healthz|metrics|dashboard|ui|v1\/[a-z0-9/_:-]+)\b/gi;
   const out: string[] = [];
   for (const m of s.matchAll(re)) out.push(m[0]);
   return uniq(out.map((p) => (p.startsWith("/") ? p : `/${p}`)));
@@ -100,7 +100,7 @@ for (const f of docFiles) {
 const knownExternalVars = new Set<string>(["BASE_URL", "API_KEY", "API_KEYS", "APP_ENV"]);
 
 const sourceSearchFiles: string[] = [];
-for (const r of ["oneapi-gateway/src", "batch-worker/src", "litellm-service/app", "config", "docker-compose.yml"]) {
+for (const r of ["oneapi-gateway/src", "batch-worker/src", "scripts", "config", "docker-compose.yml"]) {
   const p = path.join(repoRoot, r);
   if (!exists(p)) continue;
   const stat = fs.statSync(p);
@@ -120,24 +120,17 @@ for (const [v, files] of referencedEnvVars.entries()) {
 }
 
 const proxiedV1Allow = [/^\/v1\/chat\/completions$/i, /^\/v1\/embeddings$/i, /^\/v1\/models$/i];
-const gatewayMustHandle = [/^\/v1\/batches\b/i, /^\/admin\/api\//i, /^\/dashboard\b/i, /^\/metrics$/i, /^\/healthz$/i];
+const gatewayMustHandle = [/^\/v1\/batches\b/i, /^\/dashboard\b/i, /^\/metrics$/i, /^\/healthz$/i];
 const gatewayRouteFiles = [
   path.join(repoRoot, "oneapi-gateway/src/index.ts"),
   path.join(repoRoot, "oneapi-gateway/src/proxy.ts"),
-  path.join(repoRoot, "oneapi-gateway/src/admin.ts"),
-  path.join(repoRoot, "oneapi-gateway/src/dashboard.ts"),
+  path.join(repoRoot, "oneapi-gateway/src/ui.ts"),
   path.join(repoRoot, "oneapi-gateway/src/batch.ts"),
 ];
 const gatewayBlob = gatewayRouteFiles.filter(exists).map((p) => readText(p)).join("\n");
 
 function canonicalizeDocPath(p: string): string {
   let out = p;
-  out = out.replace(/^\/admin\/api\/tenants\/[^/]+\/unbind_keys$/i, "/admin/api/tenants/:tenantId/unbind_keys");
-  out = out.replace(/^\/admin\/api\/tenants\/[^/]+$/i, "/admin/api/tenants/:tenantId");
-  out = out.replace(/^\/admin\/api\/keys\/[^/]+\/rpm$/i, "/admin/api/keys/:id/rpm");
-  out = out.replace(/^\/admin\/api\/keys\/[^/]+\/tenant$/i, "/admin/api/keys/:id/tenant");
-  out = out.replace(/^\/admin\/api\/keys\/[^/]+\/revoke$/i, "/admin/api/keys/:id/revoke");
-  out = out.replace(/^\/admin\/api\/keys\/[^/]+$/i, "/admin/api/keys/:id");
   out = out.replace(/^\/v1\/batches\/[^/]+$/i, "/v1/batches/:batchId");
   out = out.replace(/^\/v1\/batches\/[^/]+\/output$/i, "/v1/batches/:batchId/output");
   return out;
