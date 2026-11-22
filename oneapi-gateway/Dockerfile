@@ -6,15 +6,6 @@ RUN npm ci --no-audit --no-fund
 COPY src /app/src
 RUN npx tsc -p tsconfig.build.json
 
-FROM node:22-alpine AS build-chat-ui
-
-WORKDIR /app/chat-ui
-COPY chat-ui/package.json chat-ui/package-lock.json chat-ui/tsconfig.json chat-ui/vite.config.ts chat-ui/index.html /app/chat-ui/
-COPY chat-ui/src /app/chat-ui/src
-COPY shared-ui /app/shared-ui
-RUN npm ci --no-audit --no-fund
-RUN npm run build
-
 FROM node:22-alpine
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -23,7 +14,6 @@ WORKDIR /app
 COPY --from=build-gateway /app/package.json /app/package.json
 COPY --from=build-gateway /app/node_modules /app/node_modules
 COPY --from=build-gateway /app/dist /app/dist
-COPY --from=build-chat-ui /app/chat-ui/dist /app/chat-ui/dist
 
 USER appuser
 EXPOSE 3003

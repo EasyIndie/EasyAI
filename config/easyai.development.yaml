@@ -4,6 +4,8 @@ app:
   log_level: "info"
   # LiteLLM Admin UI (keys / budgets / spend / logs), opened by the browser.
   console_url: "http://localhost:3005/ui"
+  # 可选聊天界面（docker compose --profile chat up -d 启动 Open WebUI）
+  chat_url: "http://localhost:3006"
   rate_limit_rpm: 120
   default_timeout_ms: 120000
   cache_enabled: true

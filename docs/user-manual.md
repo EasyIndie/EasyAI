@@ -5,7 +5,7 @@
 - 用 OpenAI 兼容接口调用不同厂商的模型：`/v1/chat/completions`、`/v1/responses`、`/v1/embeddings`、`/v1/models` 等
 - 用一份 YAML 定义模型别名，换厂商不用改客户端代码
 - 在控制台（LiteLLM Admin UI，支持中文）管理密钥、预算、限流、用量和请求日志
-- 使用 Chat UI 进行会话测试（`/chat`）
+- 使用可选的 Open WebUI 聊天界面（`docker compose --profile chat up -d`）
 - 使用 Batch API 提交异步任务（`/v1/batches`）
 
 ## 2. 快速开始
@@ -21,7 +21,7 @@ docker compose exec -T ollama ollama pull qwen2.5:0.5b
 ### 2.2 打开入口
 
 - 首页：`http://localhost:3004/`
-- Chat：`http://localhost:3004/chat`
+- 聊天：`http://localhost:3006`（需 `--profile chat` 启动 Open WebUI）
 - API 文档：`http://localhost:3004/docs`
 - 控制台：`http://localhost:3005/ui`（也可从首页「控制台」按钮进入）
 
@@ -42,7 +42,7 @@ curl -sS http://localhost:3004/v1/chat/completions \
 - 两种 Key 都可用：
   - YAML 里的 `secrets.api_keys`（最简单，适合个人/小团队）
   - 控制台创建的 LiteLLM 虚拟密钥（带预算、模型白名单、RPM/TPM 限制）
-- 所有 `/v1/*`、`/chat-api/*` 请求都要求鉴权
+- 所有 `/v1/*` 请求都要求鉴权（含 Batch 与透传的其他模型协议）
 
 ### 3.2 控制台鉴权
 
@@ -69,16 +69,9 @@ curl -sS http://localhost:3004/v1/chat/completions \
 Batch 可用前提：`secrets.internal_token` 已配置且 `batch_worker` 正常运行。
 `/v1/batches/:batchId/output` 返回 `application/jsonl`（每行一条结果）。
 
-### 4.3 Chat API（供 Chat UI 使用）
-
-- `GET /chat-api/models`
-- `GET/POST/DELETE /chat-api/conversations`
-- `GET /chat-api/conversations/:id/messages`
-- `POST /chat-api/conversations/:id/chat`
-
 ## 5. 配置约定（重要）
 
-- 统一配置文件：`config/easyai.development.yaml`
+- 统一配置文件：`config/easyai.development.yaml`（详见[部署与运维](./deployment.md)）
 - `models` 是对外可见模型名（客户端请求时填这里的 key），启动时自动转成 LiteLLM 的 `model_list`
 - `providers` 存放各厂商的 `api_base` / `api_key`
 - 生产部署请使用 `config/easyai.production.local.yaml`（不入仓）
@@ -95,5 +88,4 @@ Batch 可用前提：`secrets.internal_token` 已配置且 `batch_worker` 正常
 ## 7. 相关文档
 
 - [部署指南](./deployment.md)
-- [运行手册](./operations.md)
 - [YAML 密钥管理](./yaml-secret-management.md)

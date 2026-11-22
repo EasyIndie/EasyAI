@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.4.3",
-    "@fastify/static": "^10.1.12",
     "fastify": "^5.12.8",
     "js-yaml": "^5.5.0",
     "pg": "^8.23.1",

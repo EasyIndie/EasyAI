@@ -56,6 +56,25 @@ services:
       - postgres
       - litellm
 
+  # Optional chat UI (中文，多用户/RAG/工具). Enable with:
+  #   docker compose --profile chat up -d
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    profiles: ["chat"]
+    restart: unless-stopped
+    ports:
+      - "3006:8080"
+    environment:
+      OPENAI_API_BASE_URL: "http://oneapi:3003/v1"
+      OPENAI_API_KEY: "dev-key"
+      ENABLE_OLLAMA_API: "false"
+      # 极速上手：默认免登录。生产请改为 true 并配置管理员账号。
+      WEBUI_AUTH: "false"
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      - oneapi
+
   batch_worker:
     build:
       context: ./batch-worker
@@ -68,6 +87,8 @@ services:
       - oneapi
 
 volumes:
+  openwebui_data:
+    name: easyai_dev_openwebui_data
   postgres_data:
     name: easyai_dev_postgres_data
   ollama_data:

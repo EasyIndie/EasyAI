@@ -2,7 +2,7 @@ import { sha256Hex } from "./crypto.js";
 import type { Config } from "./config.js";
 
 export type AuthContext = {
-  /** Stable identity used to scope conversations and batches. */
+  /** Stable identity used for rate limiting and batch ownership. */
   principal: string;
   /**
    * true  -> the gateway authenticates the key itself and talks to LiteLLM with the master key

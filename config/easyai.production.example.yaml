@@ -4,6 +4,8 @@ app:
   log_level: "info"
   # Browser-facing LiteLLM console URL, e.g. http://your-host:3005/ui
   console_url: "http://localhost:3005/ui"
+  # 可选：Open WebUI 地址（docker compose --profile chat up -d）
+  chat_url: "http://localhost:3006"
 
 secrets:
   # LiteLLM master key: console login password + internal admin key. Never hand this to API clients.

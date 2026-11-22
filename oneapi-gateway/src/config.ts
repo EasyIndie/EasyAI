@@ -16,6 +16,8 @@ export type Config = {
   litellmMasterKey: string;
   /** Public URL of the LiteLLM console (`/ui`). */
   consoleUrl?: string;
+  /** Public URL of the optional chat UI (Open WebUI). */
+  chatUrl?: string;
   upstreamTimeoutMs: number;
   rateLimitRpm: number;
   corsOrigin: string | string[];
@@ -106,6 +108,7 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
   }
 
   const consoleUrl = app.console_url ? String(app.console_url) : undefined;
+  const chatUrl = app.chat_url ? String(app.chat_url) : undefined;
   const upstreamTimeoutMs = Number(app.upstream_timeout_ms ?? 60000);
   const rateLimitRpm = Number(app.rate_limit_rpm ?? 120);
   const corsOrigin = "*";
@@ -129,6 +132,7 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
     litellmBaseUrl,
     litellmMasterKey,
     consoleUrl,
+    chatUrl,
     upstreamTimeoutMs,
     rateLimitRpm,
     corsOrigin,

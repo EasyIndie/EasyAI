@@ -23,27 +23,31 @@ npm install
 npm test
 ```
 
-前端构建：
-
-```bash
-cd oneapi-gateway/chat-ui
-npm ci && npm run build
-```
-
 LiteLLM 配置生成（改完 `config/*.yaml` 后可本地校验）：
 
 ```bash
 python3 scripts/render-litellm-config.py config/easyai.development.yaml
 ```
 
-## 3. 文档一致性校验
+## 3. 仓库结构
+
+```
+oneapi-gateway/   轻量网关（Fastify）：鉴权、限流、/v1 透传、Batch、首页
+batch-worker/     Batch 队列消费者
+scripts/          YAML→LiteLLM 渲染、compose 渲染、smoke、备份恢复、密钥检查
+tools/doc-audit/  文档与路由一致性门禁
+config/           唯一的 YAML 配置
+docs/             中文文档
+```
+
+## 4. 文档一致性校验
 
 ```bash
 cd oneapi-gateway
 npm run doc-audit
 ```
 
-## 4. CI 对齐
+## 5. CI 对齐
 
 仓库 CI 使用：`.github/workflows/ci.yml` -> `scripts/test-all.sh`。
 
@@ -59,13 +63,13 @@ bash scripts/test-all.sh
 ./scripts/smoke-compose.sh
 ```
 
-## 5. 安全基线（生产）
+## 6. 安全基线（生产）
 
 - 生产配置从 `config/easyai.production.example.yaml` 复制到本地私有文件
 - 必须替换 `REPLACE_WITH_*`、`dev-key`、`dev-internal` 等默认值
 - 不要提交 `*.local.yaml`、`.env`、密钥文件
 
-## 6. 提交前密钥检查（必做）
+## 7. 提交前密钥检查（必做）
 
 首次在本仓库启用 hooks：
 

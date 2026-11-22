@@ -6,7 +6,6 @@ import { createDb } from "./db.js";
 import { registerProxyRoutes } from "./proxy.js";
 import { registerUi } from "./ui.js";
 import { registerBatchRoutes } from "./batch.js";
-import { registerChatRoutes } from "./chat.js";
 
 const cfg = loadConfig();
 
@@ -71,7 +70,6 @@ await registerUi(app, cfg);
 await registerProxyRoutes(app, { cfg, redis });
 
 await registerBatchRoutes(app, cfg, db, redis);
-await registerChatRoutes(app, cfg, db);
 
 await app.listen({ host: "0.0.0.0", port: cfg.port });
 

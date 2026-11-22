@@ -4,7 +4,6 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="${COMPOSE_FILE:-$root/docker-compose.yml}"
 
-mode="app"
 with_redis="false"
 assume_yes="false"
 
@@ -14,36 +13,25 @@ usage() {
   ./scripts/reset-db.sh [选项]
 
 说明:
-  一键清空当前项目的数据库数据，仅作用于 docker-compose.yml 中的 Postgres/Redis。
-  不会删除 Ollama 模型卷，不会删除源码或配置文件。
+  清空 EasyAI 的业务数据（batch 表）。LiteLLM 的密钥/用量数据在它自己的表里，
+  需要清理请使用控制台或直接操作数据库。
 
 选项:
-  --usage-only   仅清空 conversations / messages 会话表
-  --all          清空 OneAPI 业务表（默认）
   --with-redis   同时清空 Redis 缓存和限流计数
   --yes, -y      跳过确认提示
   --help, -h     显示帮助
 
 默认清空的表:
-  batch_items, batches, conversations, messages
+  batch_items, batches
 
 示例:
   ./scripts/reset-db.sh
-  ./scripts/reset-db.sh --usage-only
-  ./scripts/reset-db.sh --all --with-redis --yes
+  ./scripts/reset-db.sh --with-redis --yes
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --usage-only)
-      mode="usage"
-      shift
-      ;;
-    --all)
-      mode="app"
-      shift
-      ;;
     --with-redis)
       with_redis="true"
       shift
@@ -80,14 +68,8 @@ if ! docker compose "${compose_args[@]}" ps postgres >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ "$mode" == "usage" ]]; then
-  sql="TRUNCATE TABLE messages, conversations RESTART IDENTITY CASCADE;"
-  summary="仅清空会话与消息"
-else
-  sql="TRUNCATE TABLE batch_items, batches, messages, conversations RESTART IDENTITY CASCADE;"
-  summary="清空 batches、batch_items、messages、conversations"
-fi
-
+sql="TRUNCATE TABLE batch_items, batches RESTART IDENTITY CASCADE;"
+summary="清空 batches、batch_items"
 if [[ "$with_redis" == "true" ]]; then
   summary="$summary，并清空 Redis"
 fi
