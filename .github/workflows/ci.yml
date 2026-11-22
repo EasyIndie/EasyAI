@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    # PR branches are covered by the pull_request trigger; running both doubled
+    # CI minutes (especially for Dependabot branches).
+    branches: ["main"]
   pull_request:
 
 jobs:
