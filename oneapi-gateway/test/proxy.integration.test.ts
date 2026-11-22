@@ -37,13 +37,11 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     appEnv: "test",
     port: 0,
     logLevel: "info",
-    trustProxy: false,
     apiKeys: new Set(["k1"]),
     litellmBaseUrl: "http://127.0.0.1:1",
     litellmMasterKey: "sk-test-master",
-    upstreamTimeoutMs: 2000,
+    timeoutMs: 2000,
     rateLimitRpm: 1000,
-    corsOrigin: "*",
     internalToken: undefined,
     redisUrl: "redis://fake",
     databaseUrl: "postgres://fake",
@@ -158,7 +156,7 @@ test("proxy: streams sse responses", async () => {
 });
 
 test("proxy: reports unreachable model plane as 502", async () => {
-  const cfg = makeConfig({ litellmBaseUrl: "http://127.0.0.1:1", upstreamTimeoutMs: 500 });
+  const cfg = makeConfig({ litellmBaseUrl: "http://127.0.0.1:1", timeoutMs: 500 });
   const { app, url: gwUrl } = await startGateway(cfg);
 
   const res = await fetch(gwUrl + "/v1/chat/completions", {

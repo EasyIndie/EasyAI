@@ -83,7 +83,7 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 
 | 段 | 内容 |
 |---|---|
-| `app` | `port`、`log_level`、`console_url`、`chat_url`、`rate_limit_rpm`、`default_timeout_ms`、`cache_enabled`、`cache_ttl_seconds`、`num_retries` |
+| `app` | `port`、`log_level`、`console_url`、`chat_url`、`rate_limit_rpm`、`timeout_ms`、`cache_enabled`、`cache_ttl_seconds`、`num_retries` |
 | `secrets` | `master_key`（控制台密码 + 内部主密钥）、`salt_key`（加密控制台保存的厂商 key）、`api_keys`、`internal_token`、`postgres_password` |
 | `providers` | 各厂商 `api_base` / `api_key` / `api_version` |
 | `models` | 对外模型别名 → `provider` + `model`，可加 `fallback: [其他别名]` |

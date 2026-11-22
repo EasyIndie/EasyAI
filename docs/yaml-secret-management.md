@@ -33,7 +33,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama 
 - `secrets.api_keys`
 - `secrets.internal_token`
 - `secrets.postgres_password`
-- `providers.<name>.api_key`（如 OpenAI / DeepSeek）
+- `providers.<name>.api_key`（接入云端厂商时）
 
 ## 4. 运行时保护
 

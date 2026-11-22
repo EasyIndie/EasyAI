@@ -77,7 +77,7 @@ export async function registerProxyRoutes(app: FastifyInstance, deps: ProxyDeps)
             headers,
             body: hasBody ? JSON.stringify(req.body) : undefined,
           },
-          deps.cfg.upstreamTimeoutMs,
+          deps.cfg.timeoutMs + 5000,
         );
       } catch (e: any) {
         if (e?.name === "AbortError") {

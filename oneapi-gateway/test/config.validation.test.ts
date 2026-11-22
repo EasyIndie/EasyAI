@@ -119,7 +119,7 @@ test("loadConfig: reads app.console_url and gateway knobs from YAML", async () =
         env: "development",
         console_url: "http://localhost:3005/ui",
         rate_limit_rpm: 7,
-        upstream_timeout_ms: 1500,
+        timeout_ms: 1500,
         litellm_base_url: "http://litellm:4000/",
       },
       secrets: {
@@ -132,7 +132,7 @@ test("loadConfig: reads app.console_url and gateway knobs from YAML", async () =
       const cfg = loadConfig(tmpFile);
       assert.equal(cfg.consoleUrl, "http://localhost:3005/ui");
       assert.equal(cfg.rateLimitRpm, 7);
-      assert.equal(cfg.upstreamTimeoutMs, 1500);
+      assert.equal(cfg.timeoutMs, 1500);
       assert.equal(cfg.litellmBaseUrl, "http://litellm:4000");
     },
   );

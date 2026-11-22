@@ -2,7 +2,7 @@
 
 ## 1. 组件
 
-- `oneapi-gateway`：统一入口，提供鉴权、限流、`/v1/*` 透传、Batch API、首页与页面跳转（约 1,300 行）
+- `oneapi-gateway`：统一入口，提供鉴权、限流、`/v1/*` 透传、Batch API、首页与页面跳转（约 800 行）
 - `litellm`：官方 LiteLLM Proxy 镜像，作为模型接入面，负责 100+ provider 协议适配、模型别名、重试/故障转移、Redis 缓存、内容过滤护栏与 `/docs`
 - `batch-worker`：消费 Redis 队列，调用网关执行批任务，并写回 Postgres
 - `redis`：限流、LiteLLM 响应缓存、Batch 队列
@@ -40,7 +40,7 @@
 ## 4. 配置边界
 
 - 统一配置源：一份 YAML（容器内挂载为 `/app/config/easyai.yaml`）
-- 网关读取：`app.port`、`app.console_url`、`app.rate_limit_rpm`、`app.upstream_timeout_ms`、`secrets.api_keys`、`secrets.internal_token`、`secrets.master_key`、`secrets.postgres_password`
+- 网关读取：`app.env`、`app.port`、`app.log_level`、`app.console_url`、`app.chat_url`、`app.rate_limit_rpm`、`app.timeout_ms`、`secrets.api_keys`、`secrets.internal_token`、`secrets.master_key`、`secrets.postgres_password`
 - LiteLLM 配置在启动时由 `scripts/render-litellm-config.py` 从同一份 YAML 生成：`providers.*`、`models.*`、`app.*`、`guardrails.*` → `model_list` / `litellm_settings` / `guardrails` / `router_settings`
 - 说明：不存在第二份 LiteLLM 配置文件；模型别名、fallback、缓存开关、护栏关键词都只在这一份 YAML 里维护
 

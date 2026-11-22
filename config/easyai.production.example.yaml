@@ -2,15 +2,19 @@ app:
   env: "production"
   port: 3003
   log_level: "info"
-  # Browser-facing LiteLLM console URL, e.g. http://your-host:3005/ui
+  # 浏览器访问地址（改成实际域名/IP）：控制台（LiteLLM Admin UI）与聊天界面（Open WebUI）
   console_url: "http://localhost:3005/ui"
-  # 可选：Open WebUI 地址（docker compose --profile chat up -d）
   chat_url: "http://localhost:3006"
+  rate_limit_rpm: 120
+  timeout_ms: 120000
+  cache_enabled: true
+  cache_ttl_seconds: 60
+  num_retries: 2
 
 secrets:
-  # LiteLLM master key: console login password + internal admin key. Never hand this to API clients.
+  # 控制台登录密码 + 网关访问 LiteLLM 的内部主密钥，不要发给 API 客户端
   master_key: "REPLACE_WITH_LITELLM_MASTER_KEY"
-  # Keep this stable: it encrypts provider keys stored in the console database.
+  # 加密控制台保存的厂商密钥，一旦使用不要再改
   salt_key: "REPLACE_WITH_STABLE_SALT_KEY"
   api_keys:
     - "REPLACE_WITH_CLIENT_API_KEY"
@@ -18,11 +22,6 @@ secrets:
   postgres_password: "REPLACE_WITH_POSTGRES_PASSWORD"
 
 providers:
-  openai:
-    api_key: "REPLACE_WITH_OPENAI_API_KEY"
-  deepseek:
-    api_base: "https://api.deepseek.com/v1"
-    api_key: "REPLACE_WITH_DEEPSEEK_API_KEY"
   ollama:
     api_base: "http://ollama:11434"
 
@@ -30,17 +29,25 @@ models:
   chat:
     provider: ollama
     model: qwen2.5:0.5b
-  dsv4flash:
-    provider: deepseek
-    model: deepseek-v4-flash
-  dsv4pro:
-    provider: deepseek
-    model: deepseek-v4-pro
-  gpt:
-    provider: openai
-    model: gpt-5.5
 
-# 可选：内容护栏（由 LiteLLM 内置 litellm_content_filter 执行，无需外部依赖）
+# 接入云端厂商：取消注释并填入 api_key
+# providers:
+#   deepseek:
+#     api_base: "https://api.deepseek.com/v1"
+#     api_key: "REPLACE_WITH_DEEPSEEK_API_KEY"
+#   openai:
+#     api_key: "REPLACE_WITH_OPENAI_API_KEY"
+# models:
+#   deepseek-v4:
+#     provider: deepseek
+#     model: deepseek-v4-flash
+#     # 可选：失败时自动切到别的模型别名
+#     fallback: ["chat"]
+#   gpt:
+#     provider: openai
+#     model: gpt-5.5
+
+# 可选：内容护栏（LiteLLM 内置 litellm_content_filter，无需外部依赖）
 # guardrails:
 #   enabled: true
 #   blocked_keywords:
@@ -49,10 +56,3 @@ models:
 #   mask_pii:
 #     - "email"
 #     - "us_ssn"
-
-# 可选：把某个模型配置成失败时自动切换到备选模型
-# models:
-#   chat:
-#     provider: ollama
-#     model: qwen2.5:0.5b
-#     fallback: ["dsv4flash"]

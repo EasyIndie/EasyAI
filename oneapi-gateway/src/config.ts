@@ -4,10 +4,7 @@ import { load as loadYaml } from "js-yaml";
 export type Config = {
   appEnv: "development" | "staging" | "production" | "test";
   port: number;
-  bodyLimitBytes?: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
-  trustProxy: boolean | string;
-  securityHeadersEnabled?: boolean;
   /** Keys defined in YAML. LiteLLM virtual keys are also accepted and validated by LiteLLM. */
   apiKeys: Set<string>;
   /** LiteLLM proxy base URL (model access plane). */
@@ -18,32 +15,25 @@ export type Config = {
   consoleUrl?: string;
   /** Public URL of the optional chat UI (Open WebUI). */
   chatUrl?: string;
-  upstreamTimeoutMs: number;
+  /** Provider request timeout. The gateway waits a bit longer than LiteLLM. */
+  timeoutMs: number;
   rateLimitRpm: number;
-  corsOrigin: string | string[];
   internalToken?: string;
   redisUrl: string;
   databaseUrl: string;
 };
 
-function parseBytes(value: unknown, defaultBytes: number): number {
-  if (value === undefined || value === null || value === "") return defaultBytes;
-  if (typeof value === "number") return value;
-  const s = String(value).trim().toLowerCase();
-  const m = s.match(/^(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib)?$/);
-  if (!m) return defaultBytes;
-  const n = Number(m[1]);
-  const unit = m[2] ?? "b";
-  const multiplier = unit === "mb" || unit === "mib" ? 1024 * 1024 : unit === "kb" || unit === "kib" ? 1024 : 1;
-  return Math.floor(n * multiplier);
-}
+/** Matching docker-compose service names keep the config surface small. */
+const REDIS_URL = "redis://redis:6379";
+const POSTGRES_HOST = "postgres";
+const POSTGRES_PORT = 5432;
+const POSTGRES_USER = "oneapi";
+const POSTGRES_DB = "oneapi";
 
-function buildPostgresUrl(password: string, app: any): string {
-  const host = String(app.postgres_host ?? "postgres");
-  const port = Number(app.postgres_port ?? 5432);
-  const user = String(app.postgres_user ?? "oneapi");
-  const name = String(app.postgres_db ?? "oneapi");
-  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(name)}`;
+function buildPostgresUrl(password: string): string {
+  const user = encodeURIComponent(POSTGRES_USER);
+  const pass = encodeURIComponent(password);
+  return `postgres://${user}:${pass}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}`;
 }
 
 function isPlaceholderSecret(value: unknown): boolean {
@@ -93,10 +83,7 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
 
   const appEnv = app.env || "development";
   const port = Number(app.port ?? 3003);
-  const bodyLimitBytes = parseBytes(app.body_limit, 10 * 1024 * 1024);
   const logLevel = app.log_level ?? "info";
-  const trustProxy = typeof app.trust_proxy === "number" ? String(app.trust_proxy) : (app.trust_proxy ?? false);
-  const securityHeadersEnabled = appEnv !== "development";
 
   const apiKeysArr = Array.isArray(secrets.api_keys) ? secrets.api_keys : [];
   const apiKeys = new Set<string>(apiKeysArr.map((s: string) => String(s).trim()).filter(Boolean));
@@ -109,13 +96,12 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
 
   const consoleUrl = app.console_url ? String(app.console_url) : undefined;
   const chatUrl = app.chat_url ? String(app.chat_url) : undefined;
-  const upstreamTimeoutMs = Number(app.upstream_timeout_ms ?? 60000);
+
+  const timeoutMs = Number(app.timeout_ms ?? 120000);
   const rateLimitRpm = Number(app.rate_limit_rpm ?? 120);
-  const corsOrigin = "*";
 
   const internalToken = secrets.internal_token ? String(secrets.internal_token) : undefined;
-  const redisUrl = "redis://redis:6379";
-  const databaseUrl = buildPostgresUrl(String(secrets.postgres_password ?? "oneapi"), app);
+  const databaseUrl = buildPostgresUrl(String(secrets.postgres_password ?? "oneapi"));
 
   if (appEnv === "production") {
     assertNoPlaceholderSecrets({ apiKeys, internalToken, masterKey: litellmMasterKey, databaseUrl });
@@ -124,20 +110,16 @@ export function loadConfig(configPath = "/app/config/easyai.yaml"): Config {
   return {
     appEnv,
     port,
-    bodyLimitBytes,
     logLevel,
-    trustProxy,
-    securityHeadersEnabled,
     apiKeys,
     litellmBaseUrl,
     litellmMasterKey,
     consoleUrl,
     chatUrl,
-    upstreamTimeoutMs,
+    timeoutMs,
     rateLimitRpm,
-    corsOrigin,
     internalToken,
-    redisUrl,
+    redisUrl: REDIS_URL,
     databaseUrl,
   };
 }

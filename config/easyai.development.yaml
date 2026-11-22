@@ -2,45 +2,51 @@ app:
   env: "development"
   port: 3003
   log_level: "info"
-  # LiteLLM Admin UI (keys / budgets / spend / logs), opened by the browser.
+  # 浏览器访问的地址：控制台（LiteLLM Admin UI）与聊天界面（Open WebUI）
   console_url: "http://localhost:3005/ui"
-  # 可选聊天界面（docker compose --profile chat up -d 启动 Open WebUI）
   chat_url: "http://localhost:3006"
+  # 网关简单限流：每个 key 每分钟请求数
   rate_limit_rpm: 120
-  default_timeout_ms: 120000
+  # 模型请求超时（毫秒），网关会比它多等 5 秒
+  timeout_ms: 120000
+  # 以下三项交给 LiteLLM 执行
   cache_enabled: true
   cache_ttl_seconds: 60
   num_retries: 2
 
 secrets:
-  # LiteLLM master key: console login password + internal admin key. Never hand this to API clients.
+  # 控制台登录密码 + 网关访问 LiteLLM 的内部主密钥，不要发给 API 客户端
   master_key: "sk-dev-master"
-  # Optional. Encrypts provider keys stored through the console. Defaults to a hash of master_key.
-  # salt_key: "sk-change-me-and-keep-it-stable"
+  # 客户端调用用的 key（可多个）
   api_keys:
     - "dev-key"
+  # Batch worker 内部鉴权
   internal_token: "dev-internal"
   postgres_password: "oneapi"
+  # 可选：加密控制台里保存的厂商密钥，默认由 master_key 派生
+  # salt_key: "sk-keep-it-stable"
 
 providers:
   ollama:
     api_base: "http://ollama:11434"
-  openai:
-    api_key: ""
-  deepseek:
-    api_base: "https://api.deepseek.com/v1"
-    api_key: ""
 
 models:
+  # 客户端请求时使用的模型名 -> 上游 provider + model
   chat:
     provider: ollama
     model: qwen2.5:0.5b
-  dsv4flash:
-    provider: deepseek
-    model: deepseek-v4-flash
-  dsv4pro:
-    provider: deepseek
-    model: deepseek-v4-pro
-  gpt:
-    provider: openai
-    model: gpt-5.5
+
+# 接入云端厂商：取消注释并填入 api_key，模型名可自定义
+# providers:
+#   deepseek:
+#     api_base: "https://api.deepseek.com/v1"
+#     api_key: "sk-..."
+#   openai:
+#     api_key: "sk-..."
+# models:
+#   deepseek-v4:
+#     provider: deepseek
+#     model: deepseek-v4-flash
+#   gpt:
+#     provider: openai
+#     model: gpt-5.5

@@ -19,8 +19,8 @@ from typing import Any, Dict, List
 
 import yaml
 
-DEFAULT_REDIS_HOST = "redis"
-DEFAULT_REDIS_PORT = 6379
+REDIS_HOST = "redis"
+REDIS_PORT = 6379
 
 
 def load(path: str) -> Dict[str, Any]:
@@ -40,11 +40,7 @@ def database_url(cfg: Dict[str, Any]) -> str:
     secrets = cfg.get("secrets") or {}
     app_cfg = cfg.get("app") or {}
     password = str(secrets.get("postgres_password") or "oneapi")
-    host = str(app_cfg.get("postgres_host") or "postgres")
-    port = int(app_cfg.get("postgres_port") or 5432)
-    user = str(app_cfg.get("postgres_user") or "oneapi")
-    name = str(app_cfg.get("postgres_db") or "oneapi")
-    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    return f"postgresql://oneapi:{password}@postgres:5432/oneapi"
 
 
 def salt_key(cfg: Dict[str, Any]) -> str:
@@ -165,7 +161,7 @@ def render(cfg: Dict[str, Any]) -> Dict[str, Any]:
     litellm_settings: Dict[str, Any] = {
         "drop_params": True,
         "num_retries": int(app_cfg.get("num_retries") or 2),
-        "request_timeout": float(app_cfg.get("default_timeout_ms") or 120000) / 1000.0,
+        "request_timeout": float(app_cfg.get("timeout_ms") or 120000) / 1000.0,
     }
 
     cache_enabled = app_cfg.get("cache_enabled", True)
@@ -173,17 +169,15 @@ def render(cfg: Dict[str, Any]) -> Dict[str, Any]:
         litellm_settings["cache"] = True
         litellm_settings["cache_params"] = {
             "type": "redis",
-            "host": str(app_cfg.get("redis_host") or DEFAULT_REDIS_HOST),
-            "port": int(app_cfg.get("redis_port") or DEFAULT_REDIS_PORT),
+            "host": REDIS_HOST,
+            "port": REDIS_PORT,
             "ttl": int(app_cfg.get("cache_ttl_seconds") or 60),
         }
     out["litellm_settings"] = litellm_settings
 
-    router_settings: Dict[str, Any] = {"routing_strategy": str(app_cfg.get("routing_strategy") or "simple-shuffle")}
     fallbacks = render_fallbacks(cfg)
     if fallbacks:
-        router_settings["fallbacks"] = fallbacks
-    out["router_settings"] = router_settings
+        out["router_settings"] = {"fallbacks": fallbacks}
 
     out["general_settings"] = {"master_key": "os.environ/LITELLM_MASTER_KEY"}
     return out

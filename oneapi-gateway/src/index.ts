@@ -14,16 +14,14 @@ const app = Fastify({
     level: cfg.logLevel,
     redact: ["req.headers.authorization", "req.headers.x-api-key", "req.headers.x-oneapi-internal-token"],
   },
-  bodyLimit: cfg.bodyLimitBytes ?? 10 * 1024 * 1024,
-  trustProxy: cfg.trustProxy,
 });
 
 const redis = await createRedis(cfg.redisUrl);
 const db = await createDb(cfg.databaseUrl);
 
-await app.register(cors, { origin: cfg.corsOrigin });
+await app.register(cors, { origin: "*" });
 
-if (cfg.securityHeadersEnabled === true) {
+if (cfg.appEnv !== "development") {
   app.addHook("onRequest", async (_req, reply) => {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
