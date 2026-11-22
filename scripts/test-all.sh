@@ -31,14 +31,39 @@ python3 scripts/render-litellm-config.py --print-database-url config/easyai.deve
 python3 scripts/render-litellm-config.py --print-salt-key config/easyai.development.yaml >/dev/null
 
 echo "[4/4] compose smoke: hard gate"
+compose() {
+  docker compose -f "$root/docker-compose.yml" "$@"
+}
 cleanup() {
-  docker compose -f "$root/docker-compose.yml" down -v >/dev/null 2>&1 || true
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "--- compose ps ---"
+    compose ps || true
+    echo "--- litellm / oneapi logs (tail) ---"
+    compose logs --tail=120 litellm oneapi batch_worker || true
+  fi
+  compose down -v >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-docker compose -f "$root/docker-compose.yml" up -d --build redis postgres ollama litellm oneapi batch_worker
+compose up -d --build redis postgres ollama litellm oneapi batch_worker
+
+echo "waiting for LitellM to become ready ..."
+ready=""
+for _ in $(seq 1 90); do
+  if curl -fsS http://127.0.0.1:3005/health/liveliness >/dev/null 2>&1; then
+    ready="1"
+    break
+  fi
+  sleep 2
+done
+if [ -z "$ready" ]; then
+  echo "LitellM did not become ready within 180s" >&2
+  exit 1
+fi
+
 # Ensure local Ollama model exists before smoke checks the chat endpoint.
-docker compose -f "$root/docker-compose.yml" exec -T ollama ollama pull qwen2.5:0.5b
+compose exec -T ollama ollama pull qwen2.5:0.5b
 "$root/scripts/smoke-compose.sh"
 
 echo "OK"
