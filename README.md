@@ -2,19 +2,29 @@
 
 [![CI](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml)
 
-EasyAI 是一个可本地运行的统一 LLM 网关平台，包含：
-- OneAPI Gateway（统一 `/v1/*` 入口、鉴权、限流、缓存、审计）
-- LiteLLM Service（模型别名与上游适配）
+EasyAI 是一个可本地运行、免费自部署的统一 LLM 接入层：一份 YAML 配置，屏蔽不同厂商的协议差异。
+- OneAPI Gateway（统一 `/v1/*` 入口、鉴权、限流、Batch API、首页导航，约 750 行）
+- LiteLLM Proxy（官方镜像，模型接入面：provider 适配、别名、重试/故障转移、缓存、护栏、密钥/预算/用量控制台）
 - Batch Worker（异步批处理消费）
-- Dashboard / Chat UI
+- 控制台：LiteLLM Admin UI（支持中文）
+- 可选聊天界面：Open WebUI（`--profile chat`）
+- 镜像默认 `ghcr.io/berriai/litellm:main-latest`；可用 `LITELLM_IMAGE` 环境变量固定版本
 
 ## 快速启动（开发环境）
 
 ```bash
 docker compose up -d --build
-curl -sS http://localhost:3004/healthz
 docker compose exec -T ollama ollama pull qwen2.5:0.5b
+curl -sS http://localhost:3004/healthz
 ```
+
+可选：中文聊天界面（Open WebUI）
+
+```bash
+docker compose --profile chat up -d
+```
+
+打开：`http://localhost:3004/`（首页）· `http://localhost:3005/ui`（控制台）· `http://localhost:3006`（聊天，可选）。
 
 发起一次请求（默认开发 key: `dev-key`）：
 
@@ -48,14 +58,21 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 - 首页：`/`
 - API 文档：`/docs`
 - OpenAPI JSON：`/openapi.json`
-- Dashboard：`/dashboard`
-- Chat：`/chat`
+- 控制台（LiteLLM Admin UI，右上角可切换中文）：`http://localhost:3005/ui`，用户名 `admin`，密码为 `secrets.master_key`
+- 聊天：`/chat` → Open WebUI（可选组件）
+- `/dashboard` 会 302 到控制台
+
+## 升级 LiteLLM
+
+```bash
+LITELLM_IMAGE=ghcr.io/berriai/litellm@sha256:<digest> docker compose up -d litellm
+./scripts/smoke-compose.sh
+```
 
 ## 文档导航
 
 - [用户手册](docs/user-manual.md)
 - [部署指南](docs/deployment.md)
-- [运行手册](docs/operations.md)
 - [开发与测试](docs/development.md)
 - [架构说明](docs/architecture.md)
 - [YAML 密钥管理](docs/yaml-secret-management.md)

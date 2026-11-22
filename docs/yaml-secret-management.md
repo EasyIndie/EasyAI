@@ -28,13 +28,14 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama 
 
 ## 3. 必换敏感项
 
-- `secrets.admin_password`
+- `secrets.master_key`（控制台登录密码 + 网关访问 LiteLLM 的内部主密钥，不对外）
+- `secrets.salt_key`（加密控制台保存的厂商密钥，设置后不要再改）
 - `secrets.api_keys`
 - `secrets.internal_token`
 - `secrets.postgres_password`
-- `providers.<name>.api_key`（如 OpenAI / DeepSeek）
+- `providers.<name>.api_key`（接入云端厂商时）
 
 ## 4. 运行时保护
 
-- `app.env: production` 时，网关会拒绝默认/占位敏感值
-- LiteLLM 会拒绝生产环境下的占位 provider key
+- `app.env: production` 时，网关会拒绝默认/占位敏感值（缺少 `secrets.master_key` 也会直接启动失败）
+- LiteLLM 配置由 `scripts/render-litellm-config.py` 生成，生产环境请确保 `providers.<name>.api_key` 已替换
