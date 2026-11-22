@@ -22,9 +22,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: azure/setup-kubectl@v5
-        with:
-          version: "v1.30.0"
+      - name: Python deps (config renderer)
+        run: python3 -m pip install --disable-pip-version-check -r scripts/requirements.txt
       - name: Secret check
         run: bash scripts/check-secrets.sh all
       - name: Run full gate

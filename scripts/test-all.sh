@@ -6,33 +6,31 @@ export NODE_OPTIONS="${NODE_OPTIONS---no-deprecation}"
 export NPM_CONFIG_FUND="${NPM_CONFIG_FUND-false}"
 export NPM_CONFIG_AUDIT="${NPM_CONFIG_AUDIT-false}"
 
-echo "[1/6] oneapi-gateway: tests + doc-audit"
+if ! python3 -c "import yaml" >/dev/null 2>&1; then
+  echo "missing PyYAML: python3 -m pip install -r scripts/requirements.txt" >&2
+  exit 1
+fi
+
+echo "[1/4] oneapi-gateway: tests + doc-audit"
 cd "$root/oneapi-gateway"
 npm ci --no-fund --no-audit
 npm run build
 npm test
 npm run doc-audit
 
-echo "[2/6] admin-ui: build"
-cd "$root/oneapi-gateway/admin-ui"
-npm ci --no-fund --no-audit
-npm run build
-
-echo "[3/6] chat-ui: build"
-cd "$root/oneapi-gateway/chat-ui"
-npm ci --no-fund --no-audit
-npm run build
-
-echo "[4/6] batch-worker: build"
+echo "[2/4] batch-worker: build"
 cd "$root/batch-worker"
 npm ci --no-fund --no-audit
 npm run build
 
-echo "[5/6] litellm-service: unit tests"
+echo "[3/4] litellm config render"
 cd "$root"
-python3 -m unittest discover -s litellm-service/test -p 'test_*.py'
+python3 scripts/render-litellm-config.py config/easyai.development.yaml >/dev/null
+python3 scripts/render-litellm-config.py --print-master-key config/easyai.development.yaml >/dev/null
+python3 scripts/render-litellm-config.py --print-database-url config/easyai.development.yaml >/dev/null
+python3 scripts/render-litellm-config.py --print-salt-key config/easyai.development.yaml >/dev/null
 
-echo "[6/6] compose smoke: hard gate"
+echo "[4/4] compose smoke: hard gate"
 cleanup() {
   docker compose -f "$root/docker-compose.yml" down -v >/dev/null 2>&1 || true
 }

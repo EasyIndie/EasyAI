@@ -1,0 +1,4 @@
+# Python deps for scripts/render-litellm-config.py (CI + local).
+# The LiteLLM container already ships PyYAML, so this file is only needed on
+# machines/CI that render the config outside that image.
+PyYAML==6.0.3

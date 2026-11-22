@@ -1,176 +1,53 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import { sha256Hex } from "./crypto.js";
 import type { Config } from "./config.js";
-import type { Db } from "./db.js";
-import { findActiveApiKeyByHash, findTenant, markApiKeyUsed } from "./db.js";
-import type { RedisClient } from "./redis.js";
-import { ipAllowed, normalizeIp } from "./net.js";
 
 export type AuthContext = {
+  /** Stable identity used for rate limiting and batch ownership. */
   principal: string;
-  authMode: "apikey" | "oauth";
-  apiKeyHash?: string;
-  apiKeyId?: number;
-  rpmLimit?: number | null;
-  scopes?: string[] | null;
-  environment?: string;
-  tenantId?: string | null;
-  tenantRpmLimit?: number | null;
-  tenantTpmLimit?: number | null;
-  tenantDisabled?: boolean;
+  /**
+   * true  -> the gateway authenticates the key itself and talks to LiteLLM with the master key
+   * false -> the client presented a LiteLLM virtual key; forward it and let LiteLLM validate
+   */
+  useMasterKey: boolean;
+  token?: string;
 };
 
-function bearerTokenFromHeaders(headers: Record<string, string | string[] | undefined>): string | undefined {
-  const h = headers["authorization"];
-  const v = Array.isArray(h) ? h[0] : h;
-  if (!v) return;
-  const m = v.match(/^Bearer\s+(.+)$/i);
-  return m?.[1]?.trim();
+function headerValue(headers: Record<string, string | string[] | undefined>, name: string): string | undefined {
+  const raw = headers[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value && value.trim() ? value.trim() : undefined;
 }
 
-function apiKeyFromHeaders(headers: Record<string, string | string[] | undefined>): string | undefined {
-  const headerKey = headers["x-api-key"];
-  const hk = Array.isArray(headerKey) ? headerKey[0] : headerKey;
-  if (hk && hk.trim().length) return hk.trim();
-  return bearerTokenFromHeaders(headers);
+export function apiKeyFromHeaders(headers: Record<string, string | string[] | undefined>): string | undefined {
+  const direct = headerValue(headers, "x-api-key");
+  if (direct) return direct;
+  const auth = headerValue(headers, "authorization");
+  if (!auth) return;
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
 }
 
-export type OAuthVerifier = {
-  verify: (token: string) => Promise<{ subject: string }>;
-};
-
-export function hasScope(auth: AuthContext, required: string): boolean {
-  if (!auth.scopes || auth.scopes.length === 0) return true;
-  return auth.scopes.includes(required) || auth.scopes.includes("*");
-}
-
-export function createOAuthVerifier(cfg: Config): OAuthVerifier | undefined {
-  if (!cfg.authModes.has("oauth")) return;
-  if (!cfg.oauth.jwksUrl) return;
-
-  const jwks = createRemoteJWKSet(new URL(cfg.oauth.jwksUrl));
-  return {
-    verify: async (token: string) => {
-      const out = await jwtVerify(token, jwks, {
-        issuer: cfg.oauth.issuer,
-        audience: cfg.oauth.audience,
-      });
-      const sub = out.payload.sub;
-      if (!sub || typeof sub !== "string") throw new Error("missing sub");
-      return { subject: sub };
-    },
-  };
-}
-
-export async function authenticate(
-  cfg: Config,
-  oauth: OAuthVerifier | undefined,
-  headers: Record<string, string | string[] | undefined>,
-  db?: Db,
-  redis?: RedisClient,
-  reqIp?: string,
-): Promise<AuthContext> {
-  const internalHeader = headers["x-oneapi-internal-token"];
-  const internalToken = Array.isArray(internalHeader) ? internalHeader[0] : internalHeader;
-  if (cfg.internalToken && internalToken && internalToken === cfg.internalToken) {
-    if (!ipAllowed(reqIp, cfg.internalTokenAllowCidrs)) throw new Error("unauthorized");
-    const pHeader = headers["x-oneapi-principal"];
-    const principal = (Array.isArray(pHeader) ? pHeader[0] : pHeader)?.trim();
-    if (!principal) throw new Error("missing principal");
-    const tenantHeader = headers["x-oneapi-tenant-id"];
-    const tenantId = (Array.isArray(tenantHeader) ? tenantHeader[0] : tenantHeader)?.trim();
-    let tenantRpmLimit: number | null | undefined;
-    let tenantTpmLimit: number | null | undefined;
-    let tenantDisabled: boolean | undefined;
-    if (tenantId && db) {
-      if (redis) {
-        const cached = await redis.get(`tenantcfg:v1:${tenantId}`);
-        if (cached) {
-          try {
-            const j = JSON.parse(cached);
-            tenantRpmLimit = typeof j.rpm_limit === "number" ? j.rpm_limit : null;
-            tenantTpmLimit = typeof j.tpm_limit === "number" ? j.tpm_limit : null;
-            tenantDisabled = Boolean(j.disabled);
-          } catch {}
-        }
-      }
-      if (tenantRpmLimit === undefined && tenantTpmLimit === undefined && tenantDisabled === undefined) {
-        const t = await findTenant(db, tenantId);
-        if (t) {
-          tenantRpmLimit = t.rpm_limit ?? null;
-          tenantTpmLimit = t.tpm_limit ?? null;
-          tenantDisabled = Boolean(t.disabled);
-        }
-      }
-    }
-    return { principal, authMode: "apikey", tenantId: tenantId || null, tenantRpmLimit, tenantTpmLimit, tenantDisabled };
+/**
+ * Single auth entrypoint.
+ *
+ * - internal token: used by the batch worker (trusted, no client key involved)
+ * - `secrets.api_keys`: simple keys for individuals / small teams, defined in YAML
+ * - anything else: treated as a LiteLLM virtual key and forwarded untouched, so the
+ *   LiteLLM console owns key lifecycle, budgets and rate limits
+ */
+export function authenticate(cfg: Config, headers: Record<string, string | string[] | undefined>): AuthContext {
+  const internal = headerValue(headers, "x-oneapi-internal-token");
+  if (cfg.internalToken && internal && internal === cfg.internalToken) {
+    const principal = headerValue(headers, "x-oneapi-principal") ?? "internal";
+    return { principal, useMasterKey: true };
   }
 
-  const tokenOrKey = apiKeyFromHeaders(headers);
-  if (!tokenOrKey) throw new Error("missing credentials");
+  const token = apiKeyFromHeaders(headers);
+  if (!token) throw new Error("missing credentials");
 
-  if (cfg.authModes.has("apikey") && cfg.apiKeys.size > 0 && cfg.apiKeys.has(tokenOrKey)) {
-    const apiKeyHash = sha256Hex(tokenOrKey);
-    return { principal: `apikey:${apiKeyHash.slice(0, 12)}`, authMode: "apikey", apiKeyHash };
+  const hash = sha256Hex(token);
+  if (cfg.apiKeys.has(token)) {
+    return { principal: `key:${hash.slice(0, 12)}`, useMasterKey: true, token };
   }
-
-  if (cfg.authModes.has("apikey") && db) {
-    const apiKeyHash = sha256Hex(tokenOrKey);
-    const row = await findActiveApiKeyByHash(db, apiKeyHash);
-    if (row) {
-      if (!ipAllowed(reqIp, row.ip_allow_cidrs)) throw new Error("unauthorized");
-      let tenantRpmLimit: number | null | undefined;
-      let tenantTpmLimit: number | null | undefined;
-      let tenantDisabled: boolean | undefined;
-      if (row.tenant_id) {
-        if (redis) {
-          const cached = await redis.get(`tenantcfg:v1:${row.tenant_id}`);
-          if (cached) {
-            try {
-              const j = JSON.parse(cached);
-              tenantRpmLimit = typeof j.rpm_limit === "number" ? j.rpm_limit : null;
-              tenantTpmLimit = typeof j.tpm_limit === "number" ? j.tpm_limit : null;
-              tenantDisabled = Boolean(j.disabled);
-            } catch {}
-          }
-        }
-        if (tenantRpmLimit === undefined && tenantTpmLimit === undefined && tenantDisabled === undefined) {
-          const t = await findTenant(db, row.tenant_id);
-          if (t) {
-            tenantRpmLimit = t.rpm_limit ?? null;
-            tenantTpmLimit = t.tpm_limit ?? null;
-            tenantDisabled = Boolean(t.disabled);
-            if (redis) {
-              await redis.set(
-                `tenantcfg:v1:${row.tenant_id}`,
-                JSON.stringify({ rpm_limit: tenantRpmLimit, tpm_limit: tenantTpmLimit, disabled: tenantDisabled }),
-                { EX: 300 },
-              );
-            }
-          }
-        }
-      }
-      await markApiKeyUsed(db, row.id, normalizeIp(reqIp));
-      return {
-        principal: `apikey:${apiKeyHash.slice(0, 12)}`,
-        authMode: "apikey",
-        apiKeyHash,
-        apiKeyId: row.id,
-        rpmLimit: row.rpm_limit,
-        scopes: row.scopes,
-        environment: row.environment,
-        tenantId: row.tenant_id,
-        tenantRpmLimit,
-        tenantTpmLimit,
-        tenantDisabled,
-      };
-    }
-  }
-
-  if (cfg.authModes.has("oauth") && oauth) {
-    const out = await oauth.verify(tokenOrKey);
-    return { principal: `oauth:${out.subject}`, authMode: "oauth" };
-  }
-
-  throw new Error("invalid credentials");
+  return { principal: `litellm:${hash.slice(0, 12)}`, useMasterKey: false, token };
 }

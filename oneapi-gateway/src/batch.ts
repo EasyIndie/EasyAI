@@ -4,7 +4,7 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { createBatch, getBatch, insertBatchItem, listBatchItems } from "./db.js";
 import type { RedisClient } from "./redis.js";
-import { hasScope, type AuthContext } from "./auth.js";
+import { authenticate, type AuthContext } from "./auth.js";
 
 type BatchRequestItem = {
   endpoint?: string;
@@ -22,7 +22,6 @@ export async function registerBatchRoutes(
   cfg: Config,
   db: Db,
   redis: RedisClient,
-  authenticateRequest: (headers: Record<string, any>) => Promise<AuthContext>,
 ): Promise<void> {
   app.post("/v1/batches", async (req, reply) => {
     if (!cfg.internalToken) {
@@ -30,11 +29,10 @@ export async function registerBatchRoutes(
     }
     let auth: AuthContext;
     try {
-      auth = await authenticateRequest(req.headers as any);
+      auth = authenticate(cfg, req.headers as any);
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
-    if (!hasScope(auth, "batch:write")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const body = (req.body ?? {}) as any;
     const items = (body.requests ?? body.items) as BatchRequestItem[] | undefined;
@@ -43,7 +41,7 @@ export async function registerBatchRoutes(
     }
 
     const batchId = randomUUID();
-    await createBatch(db, batchId, auth.principal, auth.tenantId ?? null, items.length);
+    await createBatch(db, batchId, auth.principal, items.length);
 
     for (let i = 0; i < items.length; i++) {
       const it = items[i] as any;
@@ -63,11 +61,10 @@ export async function registerBatchRoutes(
   app.get("/v1/batches/:batchId", async (req, reply) => {
     let auth: AuthContext;
     try {
-      auth = await authenticateRequest(req.headers as any);
+      auth = authenticate(cfg, req.headers as any);
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
-    if (!hasScope(auth, "batch:read")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const batchId = String((req.params as any).batchId ?? "").trim();
     const row = await getBatch(db, batchId);
@@ -79,11 +76,10 @@ export async function registerBatchRoutes(
   app.get("/v1/batches/:batchId/output", async (req, reply) => {
     let auth: AuthContext;
     try {
-      auth = await authenticateRequest(req.headers as any);
+      auth = authenticate(cfg, req.headers as any);
     } catch {
       return reply.status(401).send({ error: { message: "unauthorized", type: "auth_error" } });
     }
-    if (!hasScope(auth, "batch:read")) return reply.status(403).send({ error: { message: "insufficient scope", type: "auth_error" } });
 
     const batchId = String((req.params as any).batchId ?? "").trim();
     const row = await getBatch(db, batchId);

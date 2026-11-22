@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { registerProxyRoutes } from "../src/proxy.js";
 import type { Config } from "../src/config.js";
-import { UpstreamPool } from "../src/upstreams.js";
-import { authenticate } from "../src/auth.js";
 
 class FakeRedis {
   private readonly kv = new Map<string, string>();
@@ -34,16 +32,45 @@ class FakeRedis {
   }
 }
 
-const dbStub = {
-  pool: {
-    query: async (_q: string, _p?: any[]) => ({ rows: [] }),
-  },
-  close: async () => {},
-} as any;
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    appEnv: "test",
+    port: 0,
+    logLevel: "info",
+    apiKeys: new Set(["k1"]),
+    litellmBaseUrl: "http://127.0.0.1:1",
+    litellmMasterKey: "sk-test-master",
+    timeoutMs: 2000,
+    rateLimitRpm: 1000,
+    internalToken: undefined,
+    redisUrl: "redis://fake",
+    databaseUrl: "postgres://fake",
+    ...overrides,
+  };
+}
 
-test("proxy: forwards to upstream and caches", async () => {
+async function startModelPlane(handler: (req: any, reply: any) => any) {
   const upstream = Fastify();
-  upstream.post("/v1/chat/completions", async (req) => {
+  upstream.post("/v1/chat/completions", handler);
+  await upstream.listen({ host: "127.0.0.1", port: 0 });
+  const addr = upstream.server.address();
+  assert.ok(addr && typeof addr === "object");
+  return { upstream, url: `http://127.0.0.1:${addr.port}` };
+}
+
+async function startGateway(cfg: Config) {
+  const app = Fastify({ logger: false });
+  await registerProxyRoutes(app, { cfg, redis: new FakeRedis() as any });
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  const addr = app.server.address();
+  assert.ok(addr && typeof addr === "object");
+  return { app, url: `http://127.0.0.1:${addr.port}` };
+}
+
+test("proxy: forwards json requests to the model plane with the master key", async () => {
+  let seenAuth: string | undefined;
+  const { upstream, url } = await startModelPlane(async (req) => {
+    seenAuth = req.headers.authorization;
     const body: any = req.body;
     return {
       id: "x",
@@ -52,233 +79,92 @@ test("proxy: forwards to upstream and caches", async () => {
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
     };
   });
-  await upstream.listen({ host: "127.0.0.1", port: 0 });
-  const upstreamAddr = upstream.server.address();
-  assert.ok(upstreamAddr && typeof upstreamAddr === "object");
-  const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
 
-  const cfg: Config = {
-    appEnv: "test",
-    port: 0,
-    logLevel: "info",
-    trustProxy: false,
-    adminUser: "admin",
-    adminPass: "admin",
-    authModes: new Set(["apikey"]),
-    apiKeys: new Set(["k1"]),
-    oauth: {},
-    upstreams: [upstreamUrl],
-    upstreamTimeoutMs: 2000,
-    rateLimitRpm: 1000,
-    cacheEnabled: true,
-    cacheTtlSeconds: 60,
-    cacheReplayChunkDelayMs: 0,
-    cacheReplayMaxTotalMs: 0,
-    cacheReplayMode: "fixed",
-    guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
-    corsOrigin: "*", tls: undefined,
-    internalToken: undefined,
-    redisUrl: "redis://fake",
-    databaseUrl: "postgres://fake",
-    modelMap: { alias: "real" },
-    fallbackMap: {},
-  };
+  const cfg = makeConfig({ litellmBaseUrl: url });
+  const { app, url: gwUrl } = await startGateway(cfg);
 
-  const redis = new FakeRedis() as any;
-  const pool = new UpstreamPool([upstreamUrl]);
-  const app = Fastify({ logger: false });
-
-  await registerProxyRoutes(app, {
-    cfg,
-    redis,
-    db: dbStub,
-    pool,
-    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
-  });
-
-  await app.listen({ host: "127.0.0.1", port: 0 });
-  const gwAddr = app.server.address();
-  assert.ok(gwAddr && typeof gwAddr === "object");
-  const gwUrl = `http://127.0.0.1:${gwAddr.port}`;
-
-  const payload = { model: "alias", messages: [{ role: "user", content: "hi" }], temperature: 0 };
-  const r1 = await fetch(gwUrl + "/v1/chat/completions", {
+  const res = await fetch(gwUrl + "/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer k1" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ model: "chat", messages: [{ role: "user", content: "hi" }] }),
   });
-  const j1Text = await r1.text();
-  assert.equal(r1.status, 200, j1Text);
-  assert.equal(r1.headers.get("x-cache"), "miss");
-  const j1: any = JSON.parse(j1Text);
-  assert.equal(j1.choices[0].message.content, "ok:real");
-
-  const r2 = await fetch(gwUrl + "/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer k1" },
-    body: JSON.stringify(payload),
-  });
-  assert.equal(r2.status, 200);
-  assert.equal(r2.headers.get("x-cache"), "hit");
+  const text = await res.text();
+  assert.equal(res.status, 200, text);
+  const json: any = JSON.parse(text);
+  assert.equal(json.choices[0].message.content, "ok:chat");
+  assert.equal(seenAuth, "Bearer sk-test-master");
 
   await app.close();
   await upstream.close();
 });
 
-test("proxy: falls back to secondary model on upstream failure", async () => {
-  const upstream = Fastify();
-  upstream.post("/v1/chat/completions", async (req, reply) => {
-    const b = req.body as any;
-    if (b.model === "primary") {
-      return reply.status(503).send({ error: "primary failed" });
-    }
-    return { choices: [{ message: { content: "fallback_ok" } }] };
-  });
-  await upstream.listen({ host: "127.0.0.1", port: 0 });
-  const upstreamAddr = upstream.server.address();
-  assert.ok(upstreamAddr && typeof upstreamAddr === "object");
-  const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
+test("proxy: rejects missing credentials", async () => {
+  const { upstream, url } = await startModelPlane(async () => ({ ok: true }));
+  const cfg = makeConfig({ litellmBaseUrl: url });
+  const { app, url: gwUrl } = await startGateway(cfg);
 
-  const cfg: Config = {
-    appEnv: "test",
-    port: 0,
-    logLevel: "info",
-    trustProxy: false,
-    adminUser: "admin",
-    adminPass: "admin",
-    authModes: new Set(["apikey"]),
-    apiKeys: new Set(["k1"]),
-    oauth: {},
-    upstreams: [upstreamUrl],
-    upstreamTimeoutMs: 2000,
-    rateLimitRpm: 1000,
-    cacheEnabled: false,
-    cacheTtlSeconds: 60,
-    cacheReplayChunkDelayMs: 0,
-    cacheReplayMaxTotalMs: 0,
-    cacheReplayMode: "fixed",
-    guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
-    corsOrigin: "*", tls: undefined,
-    internalToken: undefined,
-    redisUrl: "redis://fake",
-    databaseUrl: "postgres://fake",
-    modelMap: {},
-    fallbackMap: { primary: ["secondary"] },
-  };
-
-  const redis = new FakeRedis() as any;
-  const pool = new UpstreamPool([upstreamUrl]);
-  const app = Fastify({ logger: false });
-
-  await registerProxyRoutes(app, {
-    cfg,
-    redis,
-    db: dbStub,
-    pool,
-    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
-  });
-
-  await app.listen({ host: "127.0.0.1", port: 0 });
-  const gwAddr = app.server.address();
-  assert.ok(gwAddr && typeof gwAddr === "object");
-  const gwUrl = `http://127.0.0.1:${gwAddr.port}`;
-
-  const r = await fetch(gwUrl + "/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer k1" },
-    body: JSON.stringify({ model: "primary", messages: [{ role: "user", content: "hi" }] }),
-  });
-
-  assert.equal(r.status, 200);
-  assert.equal(r.headers.get("x-model-fallback"), "secondary");
-  const data = await r.json() as any;
-  assert.equal(data.choices[0].message.content, "fallback_ok");
+  const res = await fetch(gwUrl + "/v1/models");
+  assert.equal(res.status, 401);
 
   await app.close();
   await upstream.close();
 });
 
-test("proxy: forwards streaming requests and caches", async () => {
-  const upstream = Fastify();
-  upstream.post("/v1/chat/completions", async (req, reply) => {
+test("proxy: passes through upstream errors", async () => {
+  const { upstream, url } = await startModelPlane(async (_req, reply) => {
+    return reply.status(400).send({ error: { message: "bad model", type: "invalid_request_error" } });
+  });
+  const cfg = makeConfig({ litellmBaseUrl: url });
+  const { app, url: gwUrl } = await startGateway(cfg);
+
+  const res = await fetch(gwUrl + "/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer k1" },
+    body: JSON.stringify({ model: "nope", messages: [] }),
+  });
+  assert.equal(res.status, 400);
+  const json: any = await res.json();
+  assert.equal(json.error.message, "bad model");
+
+  await app.close();
+  await upstream.close();
+});
+
+test("proxy: streams sse responses", async () => {
+  const { upstream, url } = await startModelPlane(async (_req, reply) => {
     reply.header("content-type", "text/event-stream");
-    return reply.send("data: {\"choices\": [{\"delta\": {\"content\": \"hello\"}}]}\n\ndata: [DONE]\n\n");
+    return reply.send(
+      'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: {"usage":{"total_tokens":3}}\n\ndata: [DONE]\n\n',
+    );
   });
-  await upstream.listen({ host: "127.0.0.1", port: 0 });
-  const upstreamAddr = upstream.server.address();
-  assert.ok(upstreamAddr && typeof upstreamAddr === "object");
-  const upstreamUrl = `http://127.0.0.1:${upstreamAddr.port}`;
+  const cfg = makeConfig({ litellmBaseUrl: url });
+  const { app, url: gwUrl } = await startGateway(cfg);
 
-  const cfg: Config = {
-    appEnv: "test",
-    port: 0,
-    logLevel: "info",
-    trustProxy: false,
-    adminUser: "admin",
-    adminPass: "admin",
-    authModes: new Set(["apikey"]),
-    apiKeys: new Set(["k1"]),
-    oauth: {},
-    upstreams: [upstreamUrl],
-    upstreamTimeoutMs: 2000,
-    rateLimitRpm: 1000,
-    cacheEnabled: true,
-    cacheTtlSeconds: 60,
-    cacheReplayChunkDelayMs: 0,
-    cacheReplayMaxTotalMs: 0,
-    cacheReplayMode: "fixed",
-    guardrails: { enabled: false, blockInternalIp: true, injectionKeywords: [], piiMaskEnabled: true },
-    corsOrigin: "*", tls: undefined,
-    internalToken: undefined,
-    redisUrl: "redis://fake",
-    databaseUrl: "postgres://fake",
-    modelMap: {},
-    fallbackMap: {},
-  };
-
-  const redis = new FakeRedis() as any;
-  const pool = new UpstreamPool([upstreamUrl]);
-  const app = Fastify({ logger: false });
-
-  await registerProxyRoutes(app, {
-    cfg,
-    redis,
-    db: dbStub,
-    pool,
-    authenticateRequest: async (headers, reqIp) => authenticate(cfg, undefined, headers, undefined, undefined, reqIp),
-  });
-
-  await app.listen({ host: "127.0.0.1", port: 0 });
-  const gwAddr = app.server.address();
-  assert.ok(gwAddr && typeof gwAddr === "object");
-  const gwUrl = `http://127.0.0.1:${gwAddr.port}`;
-
-  const payload = { model: "real", messages: [{ role: "user", content: "hi" }], temperature: 0, stream: true };
-  const r1 = await fetch(gwUrl + "/v1/chat/completions", {
+  const res = await fetch(gwUrl + "/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer k1" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ model: "chat", messages: [{ role: "user", content: "hi" }], stream: true }),
   });
-  const text1 = await r1.text();
-  assert.equal(r1.status, 200, text1);
-  assert.equal(r1.headers.get("x-cache"), "miss");
-  assert.equal(r1.headers.get("content-type")?.includes("text/event-stream"), true);
-  assert.equal(text1.includes("hello"), true);
-
-  // Allow cache to be written asynchronously
-  await new Promise((r) => setTimeout(r, 50));
-
-  const r2 = await fetch(gwUrl + "/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer k1" },
-    body: JSON.stringify(payload),
-  });
-  assert.equal(r2.status, 200);
-  assert.equal(r2.headers.get("x-cache"), "hit");
-  assert.equal(r2.headers.get("content-type")?.includes("text/event-stream"), true);
-  const text2 = await r2.text();
-  assert.equal(text2.includes("hello"), true);
+  const text = await res.text();
+  assert.equal(res.status, 200, text);
+  assert.equal(res.headers.get("content-type")?.includes("text/event-stream"), true);
+  assert.equal(text.includes("hello"), true);
+  assert.equal(text.includes("[DONE]"), true);
 
   await app.close();
   await upstream.close();
+});
+
+test("proxy: reports unreachable model plane as 502", async () => {
+  const cfg = makeConfig({ litellmBaseUrl: "http://127.0.0.1:1", timeoutMs: 500 });
+  const { app, url: gwUrl } = await startGateway(cfg);
+
+  const res = await fetch(gwUrl + "/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer k1" },
+    body: JSON.stringify({ model: "chat", messages: [] }),
+  });
+  assert.equal(res.status, 502);
+
+  await app.close();
 });

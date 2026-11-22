@@ -17,6 +17,29 @@ def read_postgres_password(config_path: Path) -> str:
     return ""
 
 
+def read_first_api_key(config_path: Path) -> str:
+    in_secrets = False
+    in_api_keys = False
+    for raw in config_path.read_text(encoding="utf-8").splitlines():
+        if raw.strip() == "secrets:":
+            in_secrets = True
+            continue
+        if in_secrets and raw and not raw.startswith(" "):
+            in_secrets = False
+            in_api_keys = False
+        if not in_secrets:
+            continue
+        stripped = raw.strip()
+        if stripped.startswith("api_keys:"):
+            in_api_keys = True
+            continue
+        if in_api_keys and stripped.startswith("-"):
+            return stripped.lstrip("- ").strip().strip("'\"")
+        if in_api_keys and stripped and not stripped.startswith("-"):
+            in_api_keys = False
+    return ""
+
+
 def main() -> int:
     config_path = Path(sys.argv[1] if len(sys.argv) > 1 else "config/easyai.production.local.yaml")
     if not config_path.exists():
@@ -26,6 +49,11 @@ def main() -> int:
     password = read_postgres_password(config_path)
     if not password:
         print("missing secrets.postgres_password", file=sys.stderr)
+        return 1
+
+    api_key = read_first_api_key(config_path)
+    if not api_key:
+        print("missing secrets.api_keys", file=sys.stderr)
         return 1
 
     cfg = config_path.as_posix()
@@ -51,7 +79,14 @@ services:
     volumes:
       - ./{cfg}:/app/config/easyai.yaml:ro
 
+  openwebui:
+    environment:
+      OPENAI_API_KEY: "{api_key}"
+      WEBUI_AUTH: "true"
+
 volumes:
+  openwebui_data:
+    name: easyai_prod_openwebui_data
   postgres_data:
     name: easyai_prod_postgres_data
   ollama_data:

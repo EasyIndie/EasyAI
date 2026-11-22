@@ -3,6 +3,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3004}"
 CONFIG_FILE="${CONFIG_FILE:-config/easyai.development.yaml}"
+CONSOLE_URL="${CONSOLE_URL:-http://localhost:3005/ui}"
 
 retry_curl_json() {
   local url="$1"
@@ -43,8 +44,8 @@ check_chat() {
     -d '{"model":"chat","messages":[{"role":"user","content":"smoke"}],"temperature":0}' | jq -e . >/dev/null
 }
 
-check_dashboard() {
-  curl -fsS -u "$ADMIN_USER:$ADMIN_PASS" "$BASE_URL/admin/api/usage?sinceMinutes=60" | jq -e . >/dev/null
+check_console() {
+  curl -fsS "$CONSOLE_URL" | grep -qi "litellm\|<!doctype html"
 }
 
 create_batch() {
@@ -77,18 +78,10 @@ read_yaml_value() {
       exit
     }
     in_api_keys && $0 !~ /^[[:space:]]*-[[:space:]]*/ && $0 !~ /^[[:space:]]*$/ { in_api_keys=0 }
-
-    key == "admin_pass" && $0 ~ /^[[:space:]]*admin_password:[[:space:]]*/ {
-      sub(/^[[:space:]]*admin_password:[[:space:]]*/, "")
-      print clean($0)
-      exit
-    }
   ' "$CONFIG_FILE"
 }
 
 API_KEY="${API_KEY:-$(read_yaml_value api_key)}"
-ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASS="${ADMIN_PASS:-$(read_yaml_value admin_pass)}"
 
 json() {
   command jq -e . >/dev/null 2>&1
@@ -106,8 +99,8 @@ retry_cmd 30 1 check_models
 echo "[4/6] authenticated chat"
 retry_cmd 40 1 check_chat
 
-echo "[5/6] dashboard auth"
-retry_cmd 30 1 check_dashboard
+echo "[5/6] console (LiteLLM Admin UI)"
+retry_cmd 30 1 check_console
 
 echo "[6/6] batch queue and status"
 BATCH_ID="$(retry_cmd 30 1 create_batch)"
