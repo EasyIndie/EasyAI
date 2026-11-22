@@ -45,7 +45,8 @@ check_chat() {
 }
 
 check_console() {
-  curl -fsS "$CONSOLE_URL" | grep -qi "litellm\|<!doctype html"
+  # `/ui` redirects to `/ui/`, so follow redirects before checking the page.
+  curl -fsSL "$CONSOLE_URL" 2>/dev/null | grep -qi "<html"
 }
 
 create_batch() {
