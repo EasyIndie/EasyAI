@@ -3,7 +3,9 @@
 [![CI](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyAI/actions/workflows/ci.yml)
 
 EasyAI 是一个可本地运行、免费自部署的统一 LLM 接入层：一份 YAML 配置，屏蔽不同厂商的协议差异。
-- OneAPI Gateway（统一 `/v1/*` 入口、鉴权、限流、Batch API、首页导航，约 750 行）
+
+前置依赖：Docker + Docker Compose（可选 Python 3.11 + PyYAML，仅本地校验配置时需要）。
+- OneAPI Gateway（统一 `/v1/*` 入口、鉴权、限流、Batch API、首页导航；不含模型接入逻辑）
 - LiteLLM Proxy（官方镜像，模型接入面：provider 适配、别名、重试/故障转移、缓存、护栏、密钥/预算/用量控制台）
 - Batch Worker（异步批处理消费）
 - 控制台：LiteLLM Admin UI（支持中文）

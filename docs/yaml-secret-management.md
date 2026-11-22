@@ -13,23 +13,16 @@
 
 ## 2. 生产配置步骤
 
-```bash
-cp config/easyai.production.example.yaml config/easyai.production.local.yaml
-# 编辑并替换所有 REPLACE_WITH_*
-python3 scripts/render-local-compose.py config/easyai.production.local.yaml > docker-compose.local.yml
-```
+步骤见[部署与运维 §2](./deployment.md#2-生产环境本地私有配置)，这里只强调与本文件相关的规则：
 
-启动：
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama ollama pull qwen2.5:0.5b
-```
+- 私有文件与 override 都在 `.gitignore` 中，不要提交
+- 任何 `REPLACE_WITH_*`、`dev-key`、`dev-internal`、`oneapi` 结尾值都必须替换
+- `app.env: production` 时网关会主动拒绝这些占位值
 
 ## 3. 必换敏感项
 
 - `secrets.master_key`（控制台登录密码 + 网关访问 LiteLLM 的内部主密钥，不对外）
-- `secrets.salt_key`（加密控制台保存的厂商密钥，设置后不要再改）
+- `secrets.salt_key`（加密控制台保存的厂商密钥；不填会由 `master_key` 派生，设置后不要再改）
 - `secrets.api_keys`
 - `secrets.internal_token`
 - `secrets.postgres_password`

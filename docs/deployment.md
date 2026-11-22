@@ -2,6 +2,8 @@
 
 EasyAI 只有一份 YAML 配置和一组容器：`oneapi`（网关）+ `litellm`（模型接入面）+ `postgres` + `redis` + `batch_worker` + `ollama`，可选 `openwebui`（聊天界面）。
 
+启动有顺序依赖：`postgres` / `redis` 健康后才迁移数据库、启动应用；LiteLLM 未就绪时 `/v1` 先返回 503，`scripts/test-all.sh` 会等它就绪再跑 smoke。
+
 ---
 
 ## 1. 开发环境（一条命令）
@@ -33,8 +35,6 @@ curl -sS http://localhost:3004/v1/chat/completions \
   -d '{"model":"chat","messages":[{"role":"user","content":"hello"}],"temperature":0}'
 ```
 
-启动顺序：`redis` / `postgres` 带健康检查，`litellm` 等数据库就绪后再做 Prisma 迁移，`oneapi` 与 `batch_worker` 等数据库和 Redis 就绪后启动；网关不阻塞等待 LiteLLM，未就绪时 `/v1` 返回 503。
-
 ## 2. 生产环境（本地私有配置）
 
 ```bash
@@ -45,10 +45,16 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T ollama ollama pull qwen2.5:0.5b
 ```
 
-验收：
+验收（需要 `curl` + `jq`）：
 
 ```bash
 BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml ./scripts/smoke-compose.sh
+```
+
+生产也可以用可选聊天界面（`--profile chat`），override 会写入 `OPENAI_API_KEY` 并把 `WEBUI_AUTH` 设为 `true`：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml --profile chat up -d
 ```
 
 生产 override 使用 Compose project `easyai-prod`、数据卷 `easyai_prod_*`，与开发环境互不影响。
@@ -85,13 +91,14 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 
 | 段 | 内容 |
 |---|---|
-| `app` | `port`、`log_level`、`console_url`、`chat_url`、`rate_limit_rpm`、`timeout_ms`、`cache_enabled`、`cache_ttl_seconds`、`num_retries` |
-| `secrets` | `master_key`（控制台密码 + 内部主密钥）、`salt_key`（加密控制台保存的厂商 key）、`api_keys`、`internal_token`、`postgres_password` |
+| `app` | `env`、`port`、`log_level`、`console_url`、`chat_url`、`rate_limit_rpm`、`timeout_ms`、`cache_enabled`、`cache_ttl_seconds`、`num_retries` |
+| `secrets` | `master_key`（控制台密码 + 内部主密钥）、`salt_key`（加密控制台保存的厂商 key，缺省由 `master_key` 派生）、`api_keys`、`internal_token`、`postgres_password` |
 | `providers` | 各厂商 `api_base` / `api_key` / `api_version` |
 | `models` | 对外模型别名 → `provider` + `model`，可加 `fallback: [其他别名]` |
 | `guardrails` | 可选：`blocked_keywords`、`mask_pii`（交给 LiteLLM 内置内容过滤） |
 
 `app.timeout_ms` 是模型请求超时；网关在转发时会多等 5 秒，避免网关先于 LiteLLM 超时。
+`app.litellm_base_url` 一般不用改（默认 `http://litellm:4000`），只有 LiteLLM 部署在别处时才需要。
 
 数据库隔离：LiteLLM 使用同一个 Postgres 里的 `litellm` schema（`...?schema=litellm`），EasyAI 的业务表在 `public`。
 这样 Prisma 迁移不会和 EasyAI 的表冲突；以前版本遗留在 `public` 下的旧表不会再被使用，可以忽略或手动删除。

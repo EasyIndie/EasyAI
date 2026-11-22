@@ -73,6 +73,30 @@ function extractPathsFromText(s: string): string[] {
   return uniq(out.map((p) => (p.startsWith("/") ? p : `/${p}`)));
 }
 
+/**
+ * Repo paths mentioned in docs must exist. Container-only and gitignored paths
+ * are whitelisted because they are not present in a fresh checkout.
+ */
+const REPO_PATH_REF = /(?<![A-Za-z0-9_./-])((?:scripts|config|docs|tools|oneapi-gateway|batch-worker|\.github)\/[A-Za-z0-9_./-]+)/g;
+const PATH_WHITELIST = [
+  /^config\/easyai\.yaml$/, // container mount path (/app/config/easyai.yaml)
+  /^config\/easyai\.production\.local\.yaml$/,
+  /^docker-compose\.local\.yml$/,
+  /^backups\//,
+];
+
+function extractRepoPathsFromText(s: string): string[] {
+  const out: string[] = [];
+  for (const m of s.matchAll(REPO_PATH_REF)) {
+    const raw = m[1] ?? "";
+    const cleaned = raw.replace(/[.,;:)\]]+$/, "");
+    if (!cleaned || cleaned.includes("*")) continue;
+    if (PATH_WHITELIST.some((re) => re.test(cleaned))) continue;
+    out.push(cleaned);
+  }
+  return uniq(out);
+}
+
 const docRoots = ["docs"];
 const docFiles: string[] = [];
 for (const r of docRoots) {
@@ -83,6 +107,7 @@ for (const f of [path.join(repoRoot, "README.md")].filter(exists)) docFiles.push
 
 const referencedEnvVars = new Map<string, Set<string>>();
 const referencedPaths = new Map<string, Set<string>>();
+const referencedRepoPaths = new Map<string, Set<string>>();
 for (const f of docFiles) {
   const text = readText(f);
   for (const v of extractEnvVarsFromText(text)) {
@@ -94,6 +119,11 @@ for (const f of docFiles) {
     const s = referencedPaths.get(p) ?? new Set<string>();
     s.add(rel(f));
     referencedPaths.set(p, s);
+  }
+  for (const p of extractRepoPathsFromText(text)) {
+    const s = referencedRepoPaths.get(p) ?? new Set<string>();
+    s.add(rel(f));
+    referencedRepoPaths.set(p, s);
   }
 }
 
@@ -151,10 +181,18 @@ for (const [p, files] of referencedPaths.entries()) {
   }
 }
 
+for (const [p, files] of referencedRepoPaths.entries()) {
+  if (!exists(path.join(repoRoot, p))) {
+    errors.push(`Path "${p}" referenced in docs but missing in repo. Refs: ${[...files].join(", ")}`);
+  }
+}
+
 if (errors.length) {
   process.stderr.write(`Doc audit failed with ${errors.length} issue(s):\n`);
   for (const e of errors) process.stderr.write(`- ${e}\n`);
   process.exit(1);
 } else {
-  process.stdout.write(`Doc audit OK: scanned ${docFiles.length} doc file(s), ${referencedEnvVars.size} env var(s), ${referencedPaths.size} path(s).\n`);
+  process.stdout.write(
+    `Doc audit OK: scanned ${docFiles.length} doc file(s), ${referencedEnvVars.size} env var(s), ${referencedPaths.size} route(s), ${referencedRepoPaths.size} repo path(s).\n`,
+  );
 }

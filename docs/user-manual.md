@@ -14,16 +14,18 @@
 
 ```bash
 docker compose up -d --build
-curl -sS http://localhost:3004/healthz
 docker compose exec -T ollama ollama pull qwen2.5:0.5b
+curl -sS http://localhost:3004/healthz   # {"ok":true,...}
 ```
+
+完整部署、端口与运维见[部署与运维](./deployment.md)。
 
 ### 2.2 打开入口
 
 - 首页：`http://localhost:3004/`
-- 聊天：`http://localhost:3006`（需 `--profile chat` 启动 Open WebUI）
+- 聊天：`http://localhost:3006`（需 `--profile chat` 启动 Open WebUI；网关 `/chat` 会跳转）
 - API 文档：`http://localhost:3004/docs`
-- 控制台：`http://localhost:3005/ui`（也可从首页「控制台」按钮进入）
+- 控制台：`http://localhost:3005/ui`（首页「控制台」按钮，或网关 `/ui`、`/dashboard` 跳转）
 
 ### 2.3 发起第一条请求
 
@@ -48,7 +50,7 @@ curl -sS http://localhost:3004/v1/chat/completions \
 
 - 用户名：`admin`
 - 密码：`secrets.master_key`（可在控制台里再建 proxy_admin 账号并关闭环境变量登录）
-- 界面右上角设置里可切换语言为「简体中文」
+- 登录后在右上角账户菜单里把语言切换为「简体中文」
 
 ## 4. 常用接口
 

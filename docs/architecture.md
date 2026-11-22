@@ -2,13 +2,15 @@
 
 ## 1. 组件
 
-- `oneapi-gateway`：统一入口，提供鉴权、限流、`/v1/*` 透传、Batch API、首页与页面跳转（约 750 行）
+- `oneapi-gateway`：统一入口，提供鉴权、限流、`/v1/*` 透传、Batch API、首页与页面跳转（薄封装，不含模型接入逻辑）
 - `litellm`：官方 LiteLLM Proxy 镜像，作为模型接入面，负责 100+ provider 协议适配、模型别名、重试/故障转移、Redis 缓存、内容过滤护栏与 `/docs`
 - `batch-worker`：消费 Redis 队列，调用网关执行批任务，并写回 Postgres
 - `redis`：限流、LiteLLM 响应缓存、Batch 队列
-- `postgres`：LiteLLM 的密钥/预算/用量日志 + EasyAI 的 Batch 记录
+- `postgres`：LiteLLM 的密钥/预算/用量日志（`litellm` schema）+ EasyAI 的 Batch 记录（`public` schema）
 - `ollama`：本地模型后端（由 LiteLLM 调用）
 - `openwebui`（可选，`--profile chat`）：中文聊天界面，走网关 `/v1` 接口
+
+启动顺序：`postgres` / `redis` 通过健康检查后，`litellm` 先做 Prisma 迁移，`oneapi`、`batch_worker` 再启动；网关不等待 LiteLLM，未就绪时 `/v1` 返回 503。
 
 ## 2. 主要请求链路
 
@@ -51,13 +53,13 @@
 
 只保留上游不做、且"轻量"的部分，其余一律交给 LiteLLM。
 
-| 保留 | 行数 | 理由 |
-|---|---|---|
-| `scripts/render-litellm-config.py` | ~210 | 一份 YAML 的核心承诺 |
-| 网关（`index/proxy/auth/config/rate_limit/redis/crypto`） | ~430 | 统一入口 + YAML key/虚拟 key 双轨 + RPM |
-| `batch-worker` + `batch.ts` | ~260 | 上游空白：给无原生 Batch 的模型做离线批跑（冻结，不扩展） |
-| `scripts/` + 中文文档 + smoke/CI | ~950 | 真正的交付体验差异 |
-| 服务端渲染首页 `ui.ts` | ~95 | 入口导航 |
+| 保留 | 作用 |
+|---|---|
+| `scripts/render-litellm-config.py` | 把一份 YAML 翻译成 LiteLLM 配置，是"统一接入"的核心承诺 |
+| 网关（`index` / `proxy` / `auth` / `config` / `rate_limit`） | 统一入口 + YAML key/虚拟 key 双轨 + RPM 限流 |
+| `batch-worker` + `batch.ts` | 上游空白：给无原生 Batch 的模型做离线批跑（冻结，不扩展） |
+| `scripts/` + 中文文档 + smoke/CI | 真正的交付体验差异 |
+| 服务端渲染首页 `ui.ts` | 入口导航与端口说明 |
 
 **不再自研**：provider 适配、路由/重试/故障转移、缓存、护栏、密钥/预算/用量后台、API 文档、指标、聊天界面、会话存储。
 
