@@ -89,6 +89,8 @@ BASE_URL=http://localhost:3003 CONFIG_FILE=config/easyai.production.local.yaml .
 | `models` | 对外模型别名 → `provider` + `model`，可加 `fallback: [其他别名]` |
 | `guardrails` | 可选：`blocked_keywords`、`mask_pii`（交给 LiteLLM 内置内容过滤） |
 
+`app.timeout_ms` 是模型请求超时；网关在转发时会多等 5 秒，避免网关先于 LiteLLM 超时。
+
 生产安全开关：
 
 - `app.env: production` 时，占位值（`dev-key`、`dev-internal`、`REPLACE_WITH_*`）会让网关直接启动失败

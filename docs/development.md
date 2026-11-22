@@ -40,14 +40,22 @@ config/           唯一的 YAML 配置
 docs/             中文文档
 ```
 
-## 4. 文档一致性校验
+## 4. 提交前最小检查
+
+```bash
+cd oneapi-gateway
+npm run build && npm test && npm run doc-audit
+cd ../batch-worker && npm run build
+```
+
+## 5. 文档一致性校验
 
 ```bash
 cd oneapi-gateway
 npm run doc-audit
 ```
 
-## 5. CI 对齐
+## 6. CI 对齐
 
 仓库 CI 使用：`.github/workflows/ci.yml` -> `scripts/test-all.sh`。
 
@@ -63,13 +71,13 @@ bash scripts/test-all.sh
 ./scripts/smoke-compose.sh
 ```
 
-## 6. 安全基线（生产）
+## 7. 安全基线（生产）
 
 - 生产配置从 `config/easyai.production.example.yaml` 复制到本地私有文件
 - 必须替换 `REPLACE_WITH_*`、`dev-key`、`dev-internal` 等默认值
 - 不要提交 `*.local.yaml`、`.env`、密钥文件
 
-## 7. 提交前密钥检查（必做）
+## 8. 提交前密钥检查（必做）
 
 首次在本仓库启用 hooks：
 
